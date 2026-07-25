@@ -32,3 +32,21 @@ client.interceptors.response.use(
 )
 
 export default client
+
+/**
+ * Always returns a plain string for display, no matter what shape the
+ * backend error took. FastAPI validation errors (422) send `detail` as an
+ * ARRAY of {loc, msg, type} objects, not a string — rendering that directly
+ * in JSX crashes the whole page (React can't render a plain object as a
+ * child). Every catch block should use this instead of reading
+ * err.response?.data?.detail directly.
+ */
+export function getErrorMessage(err, fallback = 'Something went wrong') {
+  const detail = err?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    return detail.map((d) => d?.msg || (typeof d === 'string' ? d : JSON.stringify(d))).join('; ')
+  }
+  if (detail && typeof detail === 'object') return JSON.stringify(detail)
+  return fallback
+}
