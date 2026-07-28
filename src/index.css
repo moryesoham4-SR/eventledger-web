@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Theme variables, as RGB triplets so Tailwind's <alpha-value> opacity
+   modifiers (e.g. text-ink/55) keep working. Dark is the default and also
+   the fallback if data-theme is ever missing. Toggled by ThemeContext,
+   which sets data-theme on <html> and persists the choice to localStorage. */
+:root,
+[data-theme="dark"] {
+  --color-ink: 231 236 245;    /* light text on dark surfaces */
+  --color-paper: 11 18 32;     /* page background */
+  --color-card: 22 32 50;      /* card / panel surface */
+  --color-well: 28 41 64;      /* recessed accents: hovers, tab tracks, disabled fields */
+  --color-rule: 35 48 71;      /* subtle borders */
+  --color-deficit-tint: 48 16 25;     /* error banner background */
+  --color-deficit-tint-border: 61 20 32;
+  --color-deficit-tint-text: 251 164 175;
+  --skeleton-a: 22 32 50;
+  --skeleton-b: 28 41 64;
+}
+
+[data-theme="light"] {
+  --color-ink: 23 31 42;       /* dark text on light surfaces */
+  --color-paper: 244 246 250;  /* page background */
+  --color-card: 255 255 255;   /* card / panel surface */
+  --color-well: 237 240 245;   /* recessed accents */
+  --color-rule: 223 227 235;   /* subtle borders */
+  --color-deficit-tint: 253 235 237;
+  --color-deficit-tint-border: 250 214 219;
+  --color-deficit-tint-text: 190 40 65;
+  --skeleton-a: 237 240 245;
+  --skeleton-b: 226 230 238;
+}
+
+body {
+  @apply text-ink antialiased;
+  font-family: 'Inter', ui-sans-serif, sans-serif;
+  background-color: rgb(var(--color-paper));
+  transition: background-color 0.15s ease;
+}
+
+/* Every monetary figure, date, and ID renders in tabular mono so columns
+   of numbers actually line up. */
+.figure {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid #FF7A00;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Status pop — small bounce when a badge's status just changed */
+@keyframes badgePop {
+  0%   { transform: scale(0.5); opacity: 0; }
+  70%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.badge-pop {
+  animation: badgePop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Shimmering skeleton loader instead of a flat pulse */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, rgb(var(--skeleton-a)) 25%, rgb(var(--skeleton-b)) 37%, rgb(var(--skeleton-a)) 63%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* Cards lift slightly on hover */
+.lift {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+/* Quick fade + rise when navigating to a new page — keyed by route in Layout.jsx */
+@keyframes pageIn {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.page-in {
+  animation: pageIn 0.18s ease-out both;
+}
