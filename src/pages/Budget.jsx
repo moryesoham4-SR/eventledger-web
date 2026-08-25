@@ -205,6 +205,7 @@ function BudgetContent({ eventId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [form, setForm] = useState({ department_id: '', title: '', notes: '' })
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -306,12 +307,46 @@ function BudgetContent({ eventId }) {
       setImporting(false)
       e.target.value = '' // allow re-selecting the same file name later
     }
-  }
+  const filteredProposals = proposals.filter((p) => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    const matchLineItems = (p.line_items || []).some(
+      (li) => (li.item_name && li.item_name.toLowerCase().includes(q)) || (li.category && li.category.toLowerCase().includes(q))
+    )
+    return (
+      (p.title && p.title.toLowerCase().includes(q)) ||
+      (p.dept_name && p.dept_name.toLowerCase().includes(q)) ||
+      (p.notes && p.notes.toLowerCase().includes(q)) ||
+      (p.status && p.status.toLowerCase().includes(q)) ||
+      matchLineItems
+    )
+  })
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <h2 className="font-display text-2xl font-semibold text-ink">Budget Proposals</h2>
+        <div className="flex items-center gap-4 flex-wrap">
+          <h2 className="font-display text-2xl font-semibold text-ink">Budget Proposals</h2>
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search proposals..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-well border border-rule rounded-full px-3.5 py-1.5 pl-8 text-xs text-ink placeholder:text-ink/40 focus:outline-hidden focus:border-primary-500 w-44 sm:w-56 transition-all"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/40 text-xs">🔍</span>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           {canExport && (
             <button
@@ -400,19 +435,19 @@ function BudgetContent({ eventId }) {
           <div className="h-40 skeleton rounded-xl" />
           <div className="md:col-span-2 h-40 skeleton rounded-xl" />
         </div>
-      ) : proposals.length === 0 ? (
+      ) : filteredProposals.length === 0 ? (
         <div className="bg-card border border-dashed border-rule rounded-xl p-10 text-center">
-          <p className="text-3xl mb-2">🧾</p>
+          <p className="text-3xl mb-2">🔍</p>
           <p className="text-sm text-ink/60">
-            {canCreateProposal
+            {searchQuery ? `No proposals matching "${searchQuery}"` : (canCreateProposal
               ? "No proposals on the books yet — start one above (you'll need a department first)."
-              : 'Nothing here for your department yet.'}
+              : 'Nothing here for your department yet.')}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-card border border-rule rounded-xl divide-y divide-rule h-fit overflow-hidden">
-            {proposals.map((p) => (
+            {filteredProposals.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setSelectedId(p.id)}

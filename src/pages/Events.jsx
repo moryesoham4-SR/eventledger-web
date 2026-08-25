@@ -26,6 +26,7 @@ export default function Events() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [form, setForm] = useState(EMPTY_FORM)
 
   const loadEvents = async () => {
@@ -43,6 +44,17 @@ export default function Events() {
   useEffect(() => {
     loadEvents()
   }, [])
+
+  const filteredEvents = events.filter((ev) => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      (ev.name && ev.name.toLowerCase().includes(q)) ||
+      (ev.venue && ev.venue.toLowerCase().includes(q)) ||
+      (ev.currency && ev.currency.toLowerCase().includes(q)) ||
+      (ev.status && ev.status.toLowerCase().includes(q))
+    )
+  })
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -75,8 +87,29 @@ export default function Events() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="font-display text-2xl font-semibold text-ink">Events</h2>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div className="flex items-center gap-4 flex-wrap">
+          <h2 className="font-display text-2xl font-semibold text-ink">Events</h2>
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search events..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-well border border-rule rounded-full px-3.5 py-1.5 pl-8 text-xs text-ink placeholder:text-ink/40 focus:outline-hidden focus:border-primary-500 w-44 sm:w-56 transition-all"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/40 text-xs">🔍</span>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
         <button
           onClick={() => setShowForm(!showForm)}
           className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all"
@@ -148,11 +181,16 @@ export default function Events() {
 
       {loading ? (
         <p className="text-ink/55 text-sm">Loading events...</p>
-      ) : events.length === 0 ? (
-        <p className="text-ink/55 text-sm">No events yet. Create your first one above.</p>
+      ) : filteredEvents.length === 0 ? (
+        <div className="bg-card border border-dashed border-rule rounded-xl p-10 text-center">
+          <p className="text-3xl mb-2">🔍</p>
+          <p className="text-sm text-ink/60">
+            {searchQuery ? `No events matching "${searchQuery}"` : 'No events yet. Create your first one above.'}
+          </p>
+        </div>
       ) : (
         <div className="bg-card border border-rule rounded-xl divide-y divide-rule">
-          {events.map((ev) => (
+          {filteredEvents.map((ev) => (
             <div key={ev.id} className="flex items-center justify-between px-5 py-3 gap-3">
               <div className="flex items-center gap-3">
                 {ev.status && <StampBadge status={ev.status} size="xs" />}

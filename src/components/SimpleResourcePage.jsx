@@ -33,6 +33,7 @@ export default function SimpleResourcePage({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [form, setForm] = useState(Object.fromEntries(fields.map((f) => [f.key, ''])))
   const singular = title.toLowerCase().slice(0, -1)
 
@@ -52,6 +53,14 @@ export default function SimpleResourcePage({
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const filteredItems = items.filter((item) => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return Object.values(item).some(
+      (val) => val !== null && val !== undefined && String(val).toLowerCase().includes(q)
+    )
+  })
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -123,16 +132,16 @@ export default function SimpleResourcePage({
             <div key={i} className="h-14 skeleton rounded-xl" />
           ))}
         </div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="bg-card border border-dashed border-rule rounded-xl p-10 text-center">
-          <p className="text-3xl mb-2">🗒️</p>
+          <p className="text-3xl mb-2">🔍</p>
           <p className="text-sm text-ink/60">
-            {emptyHint || (canCreate ? "Nothing on the books yet — add your first one above." : 'Nothing here yet.')}
+            {searchQuery ? `No ${title.toLowerCase()} matching "${searchQuery}"` : (emptyHint || (canCreate ? "Nothing on the books yet — add your first one above." : 'Nothing here yet.'))}
           </p>
         </div>
       ) : (
         <div className="bg-card border border-rule rounded-xl divide-y divide-rule">
-          {items.map((item) => (
+          {filteredItems.map((item) => (
             <div key={item.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-well/60 transition-colors">
               <div>{renderItem(item)}</div>
               {canDelete && (

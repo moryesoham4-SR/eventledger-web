@@ -22,6 +22,7 @@ function ExpensesTab({ eventId, mode, departments }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [form, setForm] = useState(isEstimated ? EMPTY_EST : EMPTY_ACT)
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkRows, setBulkRows] = useState([newBulkRow(), newBulkRow(), newBulkRow()])
@@ -46,11 +47,28 @@ function ExpensesTab({ eventId, mode, departments }) {
     setForm(isEstimated ? EMPTY_EST : EMPTY_ACT)
     setShowForm(false)
     setBulkMode(false)
+    setSearchQuery('')
     setBulkRows([newBulkRow(), newBulkRow(), newBulkRow()])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, mode])
 
   const deptName = (id) => departments.find((d) => String(d.id) === String(id))?.name
+
+  const filteredItems = items.filter((item) => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    const department = deptName(item.department_id) || ''
+    return (
+      (item.item_name && item.item_name.toLowerCase().includes(q)) ||
+      (item.category && item.category.toLowerCase().includes(q)) ||
+      (department && department.toLowerCase().includes(q)) ||
+      (item.description && item.description.toLowerCase().includes(q)) ||
+      (item.notes && item.notes.toLowerCase().includes(q)) ||
+      (item.payment_mode && item.payment_mode.toLowerCase().includes(q)) ||
+      (item.reference && item.reference.toLowerCase().includes(q)) ||
+      (item.amount && String(item.amount).includes(q))
+    )
+  })
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -331,14 +349,16 @@ function ExpensesTab({ eventId, mode, departments }) {
         <div className="space-y-2">
           {[0, 1, 2].map((i) => <div key={i} className="skeleton h-14 rounded-xl" />)}
         </div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="bg-card border border-dashed border-rule rounded-xl p-10 text-center">
-          <p className="text-3xl mb-2">🧾</p>
-          <p className="text-sm text-ink/60">No {mode} expenses yet.</p>
+          <p className="text-3xl mb-2">🔍</p>
+          <p className="text-sm text-ink/60">
+            {searchQuery ? `No ${mode} expenses matching "${searchQuery}"` : `No ${mode} expenses yet.`}
+          </p>
         </div>
       ) : (
         <div className="bg-card border border-rule rounded-xl divide-y divide-rule">
-          {items.map((item) => (
+          {filteredItems.map((item) => (
             <div key={item.id} className="flex items-center justify-between px-5 py-3">
               <div>
                 <p className="font-medium text-ink text-sm">

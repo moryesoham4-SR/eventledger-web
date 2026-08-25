@@ -119,14 +119,49 @@ function IncomeTab({ eventId, mode, canManage }) {
     }
   }
 
+  const filteredItems = items.filter((item) => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      (item.source && item.source.toLowerCase().includes(q)) ||
+      (item.category && item.category.toLowerCase().includes(q)) ||
+      (item.notes && item.notes.toLowerCase().includes(q)) ||
+      (item.payment_mode && item.payment_mode.toLowerCase().includes(q)) ||
+      (item.reference && item.reference.toLowerCase().includes(q)) ||
+      (item.amount && String(item.amount).includes(q))
+    )
+  })
+
   const total = items.reduce((sum, i) => sum + Number(i.amount || 0), 0)
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <p className="text-sm text-ink/55">
-          Total: <span className="font-semibold text-primary-500">{formatMoney(total)}</span>
-        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <p className="text-sm text-ink/55">
+            Total: <span className="font-semibold text-primary-500">{formatMoney(total)}</span>
+          </p>
+
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search income..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-well border border-rule rounded-full px-3.5 py-1.5 pl-8 text-xs text-ink placeholder:text-ink/40 focus:outline-hidden focus:border-primary-500 w-44 sm:w-56 transition-all"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/40 text-xs">🔍</span>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
         {canManage && (
           <div className="flex items-center gap-2">
             <button
@@ -269,14 +304,16 @@ function IncomeTab({ eventId, mode, canManage }) {
         <div className="space-y-2">
           {[0, 1, 2].map((i) => <div key={i} className="skeleton h-14 rounded-xl" />)}
         </div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="bg-card border border-dashed border-rule rounded-xl p-10 text-center">
-          <p className="text-3xl mb-2">💰</p>
-          <p className="text-sm text-ink/60">No {mode} income yet.</p>
+          <p className="text-3xl mb-2">🔍</p>
+          <p className="text-sm text-ink/60">
+            {searchQuery ? `No ${mode} income matching "${searchQuery}"` : `No ${mode} income yet.`}
+          </p>
         </div>
       ) : (
         <div className="bg-card border border-rule rounded-xl divide-y divide-rule">
-          {items.map((item) => (
+          {filteredItems.map((item) => (
             <div key={item.id} className="flex items-center justify-between px-5 py-3">
               <div>
                 <p className="font-medium text-ink text-sm">

@@ -14,6 +14,7 @@ export default function Users() {
   const [auditLog, setAuditLog] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [roleForm, setRoleForm] = useState({ user_id: '', role: 'volunteer', dept_id: '' })
   const [pwForm, setPwForm] = useState({ user_id: '', new_password: '' })
 
@@ -34,6 +35,17 @@ export default function Users() {
     if (currentUser?.is_super_admin) load()
     else setLoading(false)
   }, [currentUser])
+
+  const filteredUsers = users.filter((u) => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      (u.name && u.name.toLowerCase().includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.role && u.role.toLowerCase().includes(q)) ||
+      (u.org_name && u.org_name.toLowerCase().includes(q))
+    )
+  })
 
   if (!currentUser?.is_super_admin) {
     return (
@@ -72,7 +84,29 @@ export default function Users() {
 
   return (
     <div>
-      <h2 className="font-display text-2xl font-semibold text-ink mb-6">Users</h2>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <h2 className="font-display text-2xl font-semibold text-ink">Users</h2>
+        {tab === 'users' && (
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-well border border-rule rounded-full px-3.5 py-1.5 pl-8 text-xs text-ink placeholder:text-ink/40 focus:outline-hidden focus:border-primary-500 w-48 sm:w-64 transition-all"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/40 text-xs">🔍</span>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="flex bg-well rounded-xl p-1 mb-6 w-fit">
         {['users', 'assign role', ...(currentUser?.is_super_admin ? ['reset password'] : []), 'audit log'].map((t) => (
@@ -93,8 +127,16 @@ export default function Users() {
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-14 rounded-xl" />)}
         </div>
       ) : tab === 'users' ? (
-        <div className="bg-card border border-rule rounded-xl divide-y divide-rule">
-          {users.map((u) => (
+        filteredUsers.length === 0 ? (
+          <div className="bg-card border border-dashed border-rule rounded-xl p-10 text-center">
+            <p className="text-3xl mb-2">🔍</p>
+            <p className="text-sm text-ink/60">
+              {searchQuery ? `No users matching "${searchQuery}"` : 'No users found.'}
+            </p>
+          </div>
+        ) : (
+          <div className="bg-card border border-rule rounded-xl divide-y divide-rule">
+            {filteredUsers.map((u) => (
             <div key={u.id} className="flex items-center justify-between px-5 py-3">
               <div className="flex items-center gap-3">
                 <span
