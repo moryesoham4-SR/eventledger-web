@@ -153,10 +153,32 @@ function ExpensesTab({ eventId, mode, departments }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <p className="text-sm text-ink/55">
-          Total: <span className="font-semibold text-deficit-500">{formatMoney(total)}</span>
-        </p>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="flex items-center gap-4 flex-wrap">
+          <p className="text-sm text-ink/55">
+            Total: <span className="font-semibold text-deficit-500">{formatMoney(total)}</span>
+          </p>
+
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search expenses..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-well border border-rule rounded-full px-3.5 py-1.5 pl-8 text-xs text-ink placeholder:text-ink/40 focus:outline-hidden focus:border-primary-500 w-52 sm:w-64 transition-all"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/40 text-xs">🔍</span>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setBulkMode(!bulkMode); setShowForm(false) }}
