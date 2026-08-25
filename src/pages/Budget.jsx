@@ -8,6 +8,7 @@ import { useMyRole } from '../hooks/useMyRole'
 import { getErrorMessage, getBlobErrorMessage } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { useConfirm } from '../context/ConfirmContext'
+import VendorQuoteComparison from '../components/VendorQuoteComparison'
 
 function ProposalPanel({ proposalId, onChanged, role }) {
   const toast = useToast()
@@ -184,6 +185,13 @@ function ProposalPanel({ proposalId, onChanged, role }) {
           </div>
         </div>
       )}
+
+      <VendorQuoteComparison
+        proposalId={proposalId}
+        currency={proposal.currency || 'INR'}
+        canEdit={canEdit && proposal.status === 'draft'}
+        onQuotesUpdated={() => load()}
+      />
     </div>
   )
 }
