@@ -68,16 +68,6 @@ export default function GoogleSignInButton({ label = 'Continue with Google' }) {
           },
           auto_select: false,
         })
-        const btnContainer = document.getElementById('google-btn-container')
-        if (btnContainer) {
-          window.google.accounts.id.renderButton(btnContainer, {
-            theme: 'outline',
-            size: 'large',
-            width: '100%',
-            text: 'continue_with',
-            shape: 'pill',
-          })
-        }
       } catch {
         // Fallback
       }
