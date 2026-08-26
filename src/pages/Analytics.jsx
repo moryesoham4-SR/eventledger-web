@@ -11,6 +11,8 @@ import * as incomeApi from '../api/income'
 import { formatMoney } from '../components/StatCard'
 import RequireActiveEvent from '../components/RequireActiveEvent'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
+import { generateExecutiveDeck } from '../utils/executiveDeckGenerator'
 
 const DEPT_COLORS = ['#FF7A00', '#2563EB', '#7C3AED', '#10B981', '#F59E0B', '#F43F5E', '#0EA5E9', '#EC4899']
 
@@ -45,6 +47,7 @@ function money(currency) {
 }
 
 function AnalyticsContent({ eventId }) {
+  const { user } = useAuth()
   const ct = useChartTheme()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -98,6 +101,7 @@ function AnalyticsContent({ eventId }) {
 
   // --- Budget Burn Rate: cumulative spend over time vs. approved budget ---
   const approvedBudget = proposals.filter((p) => p.status === 'approved').reduce((s, p) => s + Number(p.total_amount || 0), 0)
+
   const spendByDay = {}
   actualExpenses.forEach((e) => {
     const day = (e.paid_on || e.created_at || '').slice(0, 10)
@@ -136,10 +140,44 @@ function AnalyticsContent({ eventId }) {
   const tooltipLabelStyle = { color: ct.tooltipText, fontWeight: 600, marginBottom: 4 }
   const tooltipItemStyle = { color: ct.tooltipText }
 
+  const profit = summary.profit || 0
+  const utilPct = summary.budget_utilization || 0
+
   return (
     <div>
-      <h2 className="font-display text-2xl font-semibold text-ink mb-1">Analytics</h2>
-      <p className="text-sm text-ink/55 mb-6">{event.name}</p>
+      <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-ink mb-0.5">Analytics & Executive Board Dashboard</h2>
+          <p className="text-sm text-ink/55">{event.name}</p>
+        </div>
+        <button
+          onClick={() => generateExecutiveDeck({ event, summary, departments, proposals, actualExpenses, actualIncome, user })}
+          className="bg-primary-600 hover:bg-primary-700 active:scale-95 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+        >
+          <span>📊</span>
+          <span>Export Presentation Deck (PDF)</span>
+        </button>
+      </div>
+
+      {/* Executive Key Metrics Strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="bg-card border border-rule rounded-xl p-3.5">
+          <p className="text-[11px] font-semibold text-ink/50 uppercase tracking-wide">Total Revenue</p>
+          <p className="text-lg font-bold text-success-500 mt-1">{fmt(summary.act_income)}</p>
+        </div>
+        <div className="bg-card border border-rule rounded-xl p-3.5">
+          <p className="text-[11px] font-semibold text-ink/50 uppercase tracking-wide">Total Expenses</p>
+          <p className="text-lg font-bold text-ink mt-1">{fmt(summary.act_expense)}</p>
+        </div>
+        <div className="bg-card border border-rule rounded-xl p-3.5">
+          <p className="text-[11px] font-semibold text-ink/50 uppercase tracking-wide">Net Profit</p>
+          <p className={`text-lg font-bold mt-1 ${profit >= 0 ? 'text-success-500' : 'text-deficit-500'}`}>{fmt(profit)}</p>
+        </div>
+        <div className="bg-card border border-rule rounded-xl p-3.5">
+          <p className="text-[11px] font-semibold text-ink/50 uppercase tracking-wide">Budget Utilization</p>
+          <p className={`text-lg font-bold mt-1 ${utilPct > 100 ? 'text-deficit-500' : utilPct > 85 ? 'text-warning-500' : 'text-primary-500'}`}>{utilPct}%</p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ChartCard title="Revenue vs Expense" hint="Estimated vs. actual, side by side">
