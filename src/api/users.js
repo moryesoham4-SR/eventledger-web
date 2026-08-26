@@ -12,3 +12,5 @@ export const getAuditLog = () => client.get('/api/users/audit-log').then((r) => 
 export const getMyProfile = () => client.get('/api/users/me').then((r) => r.data)
 export const updateMyProfile = (data) => client.put('/api/users/me', data).then((r) => r.data)
 export const changeMyPassword = (data) => client.post('/api/users/me/change-password', data).then((r) => r.data)
+export const deleteMyAccount = () => client.delete('/api/users/me').then((r) => r.data)
+

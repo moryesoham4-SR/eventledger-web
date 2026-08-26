@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
@@ -18,8 +19,9 @@ const labelClass = 'block text-xs font-semibold text-ink/60 uppercase tracking-w
 
 export default function Settings() {
   const { theme, setTheme } = useTheme()
-  const { user, updateUser } = useAuth()
+  const { user, updateUser, logout } = useAuth()
   const toast = useToast()
+  const navigate = useNavigate()
 
   const [profile, setProfile] = useState(null)
   const [name, setName] = useState('')
@@ -28,6 +30,24 @@ export default function Settings() {
 
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' })
   const [savingPassword, setSavingPassword] = useState(false)
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deletingAccount, setDeletingAccount] = useState(false)
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText.trim() !== 'DELETE') return
+    setDeletingAccount(true)
+    try {
+      await usersApi.deleteMyAccount()
+      toast.success('Your account has been deleted successfully')
+      logout()
+      navigate('/register')
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Couldn't delete account. Please try again."))
+      setDeletingAccount(false)
+    }
+  }
 
   useEffect(() => {
     usersApi
@@ -185,7 +205,7 @@ export default function Settings() {
         )}
       </div>
 
-      <div className="lift bg-card border border-rule rounded-xl p-5">
+      <div className="lift bg-card border border-rule rounded-xl p-5 mb-6">
         <h3 className="font-display font-semibold text-ink mb-1">Change password</h3>
         <p className="text-sm text-ink/55 mb-4">You'll need your current password to set a new one.</p>
 
@@ -229,6 +249,69 @@ export default function Settings() {
           </button>
         </form>
       </div>
+
+      {/* Danger Zone: Delete Account */}
+      <div className="bg-deficit-500/10 border border-deficit-500/30 rounded-xl p-5">
+        <h3 className="font-display font-semibold text-deficit-500 mb-1">Danger Zone</h3>
+        <p className="text-sm text-ink/70 mb-4">
+          Permanently delete your account, workspace, and all event data. This action cannot be undone.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => setShowDeleteModal(true)}
+          className="bg-deficit-600 hover:bg-deficit-700 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+        >
+          <span>🗑️</span>
+          <span>Delete My Account</span>
+        </button>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-card border border-deficit-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-fade-in text-left">
+            <div className="flex items-center gap-3 text-deficit-500 mb-3">
+              <span className="text-2xl">⚠️</span>
+              <h3 className="font-display text-lg font-bold text-ink">Delete Account Permanently?</h3>
+            </div>
+            <p className="text-xs text-ink/70 mb-4 leading-relaxed">
+              Are you sure you want to delete <strong className="text-ink">{user?.email}</strong>? All your events, budgets, expenses, income ledgers, and sponsorship checklists will be permanently erased.
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-[11px] font-semibold text-ink/60 uppercase tracking-wide mb-1.5">
+                Type <span className="text-deficit-500 font-bold">DELETE</span> to confirm
+              </label>
+              <input
+                type="text"
+                placeholder="DELETE"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2 border-t border-rule">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 rounded-full text-xs font-semibold text-ink/60 hover:text-ink"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingAccount || deleteConfirmText.trim() !== 'DELETE'}
+                onClick={handleDeleteAccount}
+                className="bg-deficit-600 hover:bg-deficit-700 disabled:opacity-40 text-white px-5 py-2 rounded-full text-xs font-bold transition-all"
+              >
+                {deletingAccount ? 'Deleting Account…' : 'Permanently Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
