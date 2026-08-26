@@ -22,6 +22,7 @@ function IncomeTab({ eventId, mode, canManage }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [form, setForm] = useState(isEstimated ? EMPTY_EST : EMPTY_ACT)
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkRows, setBulkRows] = useState([newBulkRow(), newBulkRow(), newBulkRow()])

@@ -34,7 +34,7 @@ export default function SimpleResourcePage({
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [form, setForm] = useState(Object.fromEntries(fields.map((f) => [f.key, ''])))
+  const [form, setForm] = useState(Object.fromEntries((fields || []).map((f) => [f.key, ''])))
   const singular = title.toLowerCase().slice(0, -1)
 
   const load = async () => {
