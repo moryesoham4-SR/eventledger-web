@@ -65,7 +65,7 @@ export default function GoogleSignInButton({ label = 'Continue with Google' }) {
       email: email.toLowerCase(),
       role: 'event_admin',
       is_super_admin: true,
-      org_name: `${name}'s Workspace`,
+      org_name: name || 'User Workspace',
       avatar_color: '#4285F4',
     }
     loginWithToken('google_token_' + Date.now(), fallbackUser)

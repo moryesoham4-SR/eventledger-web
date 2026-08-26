@@ -51,7 +51,11 @@ export default function Layout() {
       <div className="p-5 border-b border-rule flex items-center justify-between">
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">EventLedger</h1>
-          {user && <p className="text-xs text-ink/50 mt-1">{user.org_name || user.email}</p>}
+          {user && (
+            <p className="text-xs text-ink/60 font-medium mt-0.5">
+              {user.name || user.email}
+            </p>
+          )}
         </div>
         <button
           onClick={() => setMobileOpen(false)}

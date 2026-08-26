@@ -109,7 +109,7 @@ export default function Workspace() {
       <div className="flex items-start justify-between mb-1 flex-wrap gap-2">
         <div>
           <h2 className="font-display text-3xl font-semibold text-ink mb-1">
-            Workspace{user?.org_name ? ` · ${user.org_name}` : ''}
+            Workspace{user?.name ? ` · ${user.name}` : user?.org_name ? ` · ${user.org_name}` : ''}
           </h2>
           <p className="text-sm text-ink/55">
             Everything across your {events.length} event{events.length === 1 ? '' : 's'}, at a glance.
