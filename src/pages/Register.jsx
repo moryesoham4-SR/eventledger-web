@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getErrorMessage } from '../api/client'
 import Logo from '../components/Logo'
+import GoogleSignInButton from '../components/GoogleSignInButton'
 
 export default function Register() {
   const [name, setName] = useState('')
@@ -55,6 +56,8 @@ export default function Register() {
               {error}
             </div>
           )}
+
+          <GoogleSignInButton label="Sign up with Google" />
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

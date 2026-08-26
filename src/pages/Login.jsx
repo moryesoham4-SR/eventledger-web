@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getErrorMessage } from '../api/client'
 import Logo from '../components/Logo'
+import GoogleSignInButton from '../components/GoogleSignInButton'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -46,6 +47,8 @@ export default function Login() {
               {error}
             </div>
           )}
+
+          <GoogleSignInButton label="Sign in with Google" />
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
