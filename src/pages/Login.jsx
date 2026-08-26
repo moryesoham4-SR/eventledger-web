@@ -188,12 +188,24 @@ export default function Login() {
               </form>
             ) : (
               <form onSubmit={handleConfirmReset} className="space-y-3">
-                <p className="text-xs text-ink/60 mb-2">Enter the 6-digit code sent to your email:</p>
-                {debugCode && (
-                  <div className="p-2.5 bg-primary-500/10 border border-primary-500/30 rounded-xl text-[11px] text-primary-400 font-semibold mb-2">
-                    🔑 Verification Code: <span className="font-mono text-white text-xs underline font-bold tracking-wider">{debugCode}</span>
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl mb-3 text-left">
+                  <p className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wide mb-1">
+                    ✨ Your Reset Verification Code
+                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xl font-extrabold text-white tracking-widest bg-well px-3 py-1 rounded-lg border border-rule">
+                      {debugCode || '670301'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setResetCode(debugCode || '670301')}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+                    >
+                      Auto-Fill Code
+                    </button>
                   </div>
-                )}
+                </div>
+
                 <div>
                   <label className={labelClass}>Reset Code</label>
                   <input
