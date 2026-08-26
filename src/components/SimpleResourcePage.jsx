@@ -41,8 +41,9 @@ export default function SimpleResourcePage({
     setLoading(true)
     try {
       const data = await listFn()
-      setItems(data)
+      setItems(Array.isArray(data) ? data : [])
     } catch (err) {
+      setItems([])
       setError(`Couldn't load ${title.toLowerCase()}`)
     } finally {
       setLoading(false)
@@ -54,11 +55,13 @@ export default function SimpleResourcePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const filteredItems = items.filter((item) => {
+  const safeItems = Array.isArray(items) ? items : []
+  const filteredItems = safeItems.filter((item) => {
+    if (!item) return false
     if (!searchQuery.trim()) return true
     const q = searchQuery.toLowerCase()
     return Object.values(item).some(
-      (val) => val !== null && val !== undefined && String(val).toLowerCase().includes(q)
+      (val) => val !== null && val !== undefined && typeof val !== 'object' && String(val).toLowerCase().includes(q)
     )
   })
 

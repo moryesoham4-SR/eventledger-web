@@ -33,8 +33,9 @@ function IncomeTab({ eventId, mode, canManage }) {
       const data = isEstimated
         ? await incomeApi.listEstimatedIncome(eventId)
         : await incomeApi.listActualIncome(eventId)
-      setItems(data)
+      setItems(Array.isArray(data) ? data : [])
     } catch {
+      setItems([])
       setError('Failed to load income')
     } finally {
       setLoading(false)
@@ -119,20 +120,22 @@ function IncomeTab({ eventId, mode, canManage }) {
     }
   }
 
-  const filteredItems = items.filter((item) => {
+  const safeItems = Array.isArray(items) ? items : []
+  const filteredItems = safeItems.filter((item) => {
+    if (!item) return false
     if (!searchQuery.trim()) return true
     const q = searchQuery.toLowerCase()
     return (
-      (item.source && item.source.toLowerCase().includes(q)) ||
-      (item.category && item.category.toLowerCase().includes(q)) ||
-      (item.notes && item.notes.toLowerCase().includes(q)) ||
-      (item.payment_mode && item.payment_mode.toLowerCase().includes(q)) ||
-      (item.reference && item.reference.toLowerCase().includes(q)) ||
-      (item.amount && String(item.amount).includes(q))
+      (item.source && String(item.source).toLowerCase().includes(q)) ||
+      (item.category && String(item.category).toLowerCase().includes(q)) ||
+      (item.notes && String(item.notes).toLowerCase().includes(q)) ||
+      (item.payment_mode && String(item.payment_mode).toLowerCase().includes(q)) ||
+      (item.reference && String(item.reference).toLowerCase().includes(q)) ||
+      (item.amount !== undefined && String(item.amount).includes(q))
     )
   })
 
-  const total = items.reduce((sum, i) => sum + Number(i.amount || 0), 0)
+  const total = safeItems.reduce((sum, i) => sum + Number(i?.amount || 0), 0)
 
   return (
     <div>
