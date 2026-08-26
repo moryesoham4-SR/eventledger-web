@@ -157,6 +157,7 @@ export default function Users() {
             </div>
           ))}
         </div>
+        )
       ) : tab === 'assign role' ? (
         <form onSubmit={handleAssignRole} className="bg-card border border-rule rounded-xl p-5 space-y-3 max-w-md">
           <p className="text-xs text-ink/55 -mt-1 mb-2">
