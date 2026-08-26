@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import { getErrorMessage } from '../api/client'
+import * as authApi from '../api/auth'
 import Logo from '../components/Logo'
 import GoogleSignInButton from '../components/GoogleSignInButton'
 
@@ -11,7 +13,16 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
+  const toast = useToast()
   const navigate = useNavigate()
+
+  // Forgot Password Modal state
+  const [showForgotModal, setShowForgotModal] = useState(false)
+  const [forgotStep, setForgotStep] = useState(1) // 1 = request code, 2 = reset password
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [resetCode, setResetCode] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -24,6 +35,50 @@ export default function Login() {
       setError(getErrorMessage(err, "Couldn't sign you in — check your details and try again."))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRequestReset = async (e) => {
+    e.preventDefault()
+    if (!forgotEmail || !forgotEmail.includes('@')) {
+      toast.error('Please enter a valid email address')
+      return
+    }
+    setForgotLoading(true)
+    try {
+      const res = await authApi.requestPasswordReset(forgotEmail)
+      toast.success(res.message || 'Reset code sent!')
+      if (res.reset_code) {
+        setResetCode(res.reset_code)
+      }
+      setForgotStep(2)
+    } catch (err) {
+      toast.error(getErrorMessage(err, "No account found with this email."))
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  const handleConfirmReset = async (e) => {
+    e.preventDefault()
+    if (!resetCode || !newPassword) {
+      toast.error('Please fill in all fields')
+      return
+    }
+    setForgotLoading(true)
+    try {
+      await authApi.confirmPasswordReset({ email: forgotEmail, reset_code: resetCode, new_password: newPassword })
+      toast.success('Password reset successfully! You can now sign in.')
+      setEmail(forgotEmail)
+      setShowForgotModal(false)
+      setForgotStep(1)
+      setForgotEmail('')
+      setResetCode('')
+      setNewPassword('')
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to reset password. Please check your code."))
+    } finally {
+      setForgotLoading(false)
     }
   }
 
@@ -63,7 +118,16 @@ export default function Login() {
               />
             </div>
             <div>
-              <label className={labelClass}>Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-ink/60 uppercase tracking-wide">Password</label>
+                <button
+                  type="button"
+                  onClick={() => { setShowForgotModal(true); setForgotEmail(email); }}
+                  className="text-xs font-semibold text-primary-500 hover:text-primary-400 transition-colors"
+                >
+                  Forgot Password?
+                </button>
+              </div>
               <input
                 type="password"
                 required
@@ -90,6 +154,82 @@ export default function Login() {
           </p>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-card border border-rule rounded-2xl max-w-sm w-full p-6 shadow-2xl animate-fade-in text-left">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-display text-base font-bold text-ink">Reset Your Password</h3>
+              <button onClick={() => setShowForgotModal(false)} className="text-ink/40 hover:text-ink text-sm">✕</button>
+            </div>
+
+            {forgotStep === 1 ? (
+              <form onSubmit={handleRequestReset} className="space-y-3">
+                <p className="text-xs text-ink/60 mb-2">Enter your email address to receive a 6-digit password reset code:</p>
+                <div>
+                  <label className={labelClass}>Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="you@example.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full bg-primary-600 hover:bg-primary-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                >
+                  {forgotLoading ? 'Generating Code…' : 'Send Reset Code →'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleConfirmReset} className="space-y-3">
+                <p className="text-xs text-ink/60 mb-2">Enter the 6-digit code and your new password:</p>
+                <div>
+                  <label className={labelClass}>Reset Code</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="123456"
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>New Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full bg-primary-600 hover:bg-primary-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                >
+                  {forgotLoading ? 'Updating Password…' : 'Reset Password'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForgotStep(1)}
+                  className="w-full text-center text-xs text-ink/50 hover:text-ink pt-1"
+                >
+                  ← Change Email
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -8,3 +8,9 @@ export const register = (name, email, password, org_name = '') =>
 
 export const googleLogin = (idToken) =>
   client.post('/api/auth/google', { id_token: idToken }).then((res) => res.data)
+
+export const requestPasswordReset = (email) =>
+  client.post('/api/auth/forgot-password', { email }).then((res) => res.data)
+
+export const confirmPasswordReset = (data) =>
+  client.post('/api/auth/reset-password-confirm', data).then((res) => res.data)
