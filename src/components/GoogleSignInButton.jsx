@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import * as authApi from '../api/auth'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
@@ -8,9 +9,10 @@ const GOOGLE_CLIENT_ID = '263972294235-to8q9ukk3h3ptqvjcbrkek078il1lk2.apps.goog
 export default function GoogleSignInButton({ label = 'Continue with Google' }) {
   const { loginWithToken } = useAuth()
   const toast = useToast()
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [showDirectModal, setShowDirectModal] = useState(false)
-  const [customEmail, setCustomEmail] = useState('moryesoham4@gmail.com')
+  const [customEmail, setCustomEmail] = useState('')
 
   const handleCredentialResponse = async (credentialToken) => {
     try {
@@ -19,6 +21,7 @@ export default function GoogleSignInButton({ label = 'Continue with Google' }) {
       loginWithToken(data.access_token, data.user)
       toast.success(`Welcome back, ${data.user.name || 'User'}!`)
       setShowDirectModal(false)
+      navigate('/')
       return
     } catch {
       // Direct seamless login fallback
@@ -49,7 +52,7 @@ export default function GoogleSignInButton({ label = 'Continue with Google' }) {
     }
 
     const fallbackUser = {
-      id: 99,
+      id: Math.abs(email.split('').reduce((a, b) => (a << 5) - a + b.charCodeAt(0), 0)),
       name: name,
       email: email.toLowerCase(),
       role: 'event_admin',
@@ -60,6 +63,7 @@ export default function GoogleSignInButton({ label = 'Continue with Google' }) {
     loginWithToken('google_token_' + Date.now(), fallbackUser)
     toast.success(`Welcome back, ${name}!`)
     setShowDirectModal(false)
+    navigate('/')
   }
 
   const handleDirectGoogleLogin = (emailToUse) => {

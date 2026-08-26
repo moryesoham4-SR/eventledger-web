@@ -40,6 +40,12 @@ export function AuthProvider({ children }) {
     return data
   }
 
+  const loginWithToken = (token, userObj) => {
+    sessionStorage.setItem('access_token', token)
+    sessionStorage.setItem('user', JSON.stringify(userObj))
+    setUser(userObj)
+  }
+
   const logout = () => {
     sessionStorage.removeItem('access_token')
     sessionStorage.removeItem('user')
@@ -63,7 +69,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login: doLogin, register: doRegister, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login: doLogin, register: doRegister, loginWithToken, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   )
