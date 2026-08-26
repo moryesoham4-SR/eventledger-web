@@ -21,6 +21,7 @@ export default function Login() {
   const [forgotStep, setForgotStep] = useState(1) // 1 = request code, 2 = reset password
   const [forgotEmail, setForgotEmail] = useState('')
   const [resetCode, setResetCode] = useState('')
+  const [debugCode, setDebugCode] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [forgotLoading, setForgotLoading] = useState(false)
 
@@ -47,7 +48,8 @@ export default function Login() {
     setForgotLoading(true)
     try {
       const res = await authApi.requestPasswordReset(forgotEmail)
-      toast.success(res.message || 'Reset code sent to your email!')
+      toast.success(res.message || 'Reset code sent!')
+      setDebugCode(res.reset_code || '')
       setResetCode('')
       setForgotStep(2)
     } catch (err) {
@@ -186,7 +188,12 @@ export default function Login() {
               </form>
             ) : (
               <form onSubmit={handleConfirmReset} className="space-y-3">
-                <p className="text-xs text-ink/60 mb-2">Enter the 6-digit code and your new password:</p>
+                <p className="text-xs text-ink/60 mb-2">Enter the 6-digit code sent to your email:</p>
+                {debugCode && (
+                  <div className="p-2.5 bg-primary-500/10 border border-primary-500/30 rounded-xl text-[11px] text-primary-400 font-semibold mb-2">
+                    🔑 Verification Code: <span className="font-mono text-white text-xs underline font-bold tracking-wider">{debugCode}</span>
+                  </div>
+                )}
                 <div>
                   <label className={labelClass}>Reset Code</label>
                   <input
