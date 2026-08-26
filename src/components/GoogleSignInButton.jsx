@@ -3,7 +3,7 @@ import * as authApi from '../api/auth'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '1047124970425-demo.apps.googleusercontent.com'
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '263972294235-to8q9ukk3h3ptqvjcbrkek078il1lk2.apps.googleusercontent.com'
 
 export default function GoogleSignInButton({ label = 'Continue with Google' }) {
   const { loginWithToken } = useAuth()
