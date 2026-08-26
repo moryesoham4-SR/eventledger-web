@@ -307,6 +307,8 @@ function BudgetContent({ eventId }) {
       setImporting(false)
       e.target.value = '' // allow re-selecting the same file name later
     }
+  }
+
   const filteredProposals = proposals.filter((p) => {
     if (!searchQuery.trim()) return true
     const q = searchQuery.toLowerCase()
