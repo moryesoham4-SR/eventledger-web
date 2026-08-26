@@ -47,10 +47,8 @@ export default function Login() {
     setForgotLoading(true)
     try {
       const res = await authApi.requestPasswordReset(forgotEmail)
-      toast.success(res.message || 'Reset code sent!')
-      if (res.reset_code) {
-        setResetCode(res.reset_code)
-      }
+      toast.success(res.message || 'Reset code sent to your email!')
+      setResetCode('')
       setForgotStep(2)
     } catch (err) {
       toast.error(getErrorMessage(err, "No account found with this email."))
