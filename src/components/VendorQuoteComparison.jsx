@@ -161,7 +161,7 @@ export default function VendorQuoteComparison({ proposalId, currency = 'INR', ca
                     </span>
                   )}
                   {isSelected && (
-                    <span className="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full shadow-xs">
+                    <span className="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full shadow-sm">
                       ✓ Selected Quote
                     </span>
                   )}
@@ -231,7 +231,7 @@ export default function VendorQuoteComparison({ proposalId, currency = 'INR', ca
 
       {/* Modal for adding vendor quote */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-card border border-rule rounded-2xl max-w-lg w-full p-6 shadow-2xl animate-fade-in">
             <h3 className="font-display text-lg font-semibold text-ink mb-1">Add Vendor Quote for Comparison</h3>
             <p className="text-xs text-ink/60 mb-4">Enter quotes received from vendors to evaluate side-by-side.</p>
@@ -244,7 +244,7 @@ export default function VendorQuoteComparison({ proposalId, currency = 'INR', ca
                   placeholder="e.g. Acme Audio Visuals"
                   value={form.vendor_name}
                   onChange={(e) => setForm({ ...form, vendor_name: e.target.value })}
-                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-hidden focus:border-primary-500"
+                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500"
                 />
               </div>
 
@@ -258,7 +258,7 @@ export default function VendorQuoteComparison({ proposalId, currency = 'INR', ca
                     placeholder="0.00"
                     value={form.quote_amount}
                     onChange={(e) => setForm({ ...form, quote_amount: e.target.value })}
-                    className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-hidden focus:border-primary-500"
+                    className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500"
                   />
                 </div>
                 <div>
@@ -267,7 +267,7 @@ export default function VendorQuoteComparison({ proposalId, currency = 'INR', ca
                     placeholder="e.g. john@acme.com"
                     value={form.contact_info}
                     onChange={(e) => setForm({ ...form, contact_info: e.target.value })}
-                    className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-hidden focus:border-primary-500"
+                    className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500"
                   />
                 </div>
               </div>
@@ -279,7 +279,7 @@ export default function VendorQuoteComparison({ proposalId, currency = 'INR', ca
                   placeholder="e.g. 2 LED walls, 4 Wireless mics, 1 Sound Engineer"
                   value={form.deliverables}
                   onChange={(e) => setForm({ ...form, deliverables: e.target.value })}
-                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-hidden focus:border-primary-500"
+                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500"
                 />
               </div>
 
@@ -289,7 +289,7 @@ export default function VendorQuoteComparison({ proposalId, currency = 'INR', ca
                   placeholder="e.g. 50% advance, 50% post-event"
                   value={form.terms}
                   onChange={(e) => setForm({ ...form, terms: e.target.value })}
-                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-hidden focus:border-primary-500"
+                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500"
                 />
               </div>
 
