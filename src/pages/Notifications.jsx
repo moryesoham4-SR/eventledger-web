@@ -88,7 +88,14 @@ export default function Notifications() {
     <div>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h2 className="font-display text-2xl font-semibold text-ink">Notifications & Overrun Alerts</h2>
+          <div className="flex items-center gap-2.5">
+            <h2 className="font-display text-2xl font-semibold text-ink">Notifications & Overrun Alerts</h2>
+            {items.filter(n => !n.is_read).length > 0 && (
+              <span className="bg-deficit-500 text-white text-xs font-extrabold px-2.5 py-0.5 rounded-full animate-pulse shadow-xs">
+                {items.filter(n => !n.is_read).length} Unread
+              </span>
+            )}
+          </div>
           <p className="text-xs text-ink/60 mt-0.5">Real-time alerts for budget thresholds, vendor deadlines, and approvals.</p>
         </div>
         <div className="flex items-center gap-2">
