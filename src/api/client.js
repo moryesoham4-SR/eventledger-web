@@ -4,6 +4,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://eventledger-api.onrende
 
 const client = axios.create({
   baseURL: API_URL,
+  timeout: 60000, // 60 seconds to allow Render free tier cold-start
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -16,17 +17,30 @@ client.interceptors.request.use((config) => {
   return config
 })
 
-// Auto-logout on 401 (expired/invalid token)
+// Auto-logout on 401, and auto-retry for Render cold-starts (502/503/timeout)
 client.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const config = error.config
     if (error.response?.status === 401) {
       sessionStorage.removeItem('access_token')
       sessionStorage.removeItem('user')
       if (window.location.pathname !== '/login') {
         window.location.href = '/login'
       }
+      return Promise.reject(error)
     }
+
+    // Auto-retry cold start delays or temporary server wakeups (502/503/timeout/network)
+    if (config && (!config._retryCount || config._retryCount < 2)) {
+      config._retryCount = (config._retryCount || 0) + 1
+      const isColdStart = !error.response || [502, 503, 504].includes(error.response?.status) || error.code === 'ECONNABORTED'
+      if (isColdStart) {
+        await new Promise((res) => setTimeout(res, 2500))
+        return client(config)
+      }
+    }
+
     return Promise.reject(error)
   }
 )
