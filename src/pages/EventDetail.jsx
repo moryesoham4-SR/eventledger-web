@@ -94,7 +94,7 @@ export default function EventDetail() {
       toast.success('Event exported')
     } catch (err) {
       toast.error(await getBlobErrorMessage(err, "Couldn't export this event"))
-    } fontally {
+    } finally {
       setExporting(false)
     }
   }
