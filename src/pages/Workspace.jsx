@@ -4,6 +4,7 @@ import * as eventsApi from '../api/events'
 import * as notificationsApi from '../api/notifications'
 import * as budgetApi from '../api/budget'
 import StatCard, { formatMoney } from '../components/StatCard'
+import TeamRosterModal from '../components/TeamRosterModal'
 import { useAuth } from '../context/AuthContext'
 import { useActiveEvent } from '../context/EventContext'
 
@@ -42,6 +43,7 @@ export default function Workspace() {
   const [summaries, setSummaries] = useState({}) // eventId -> summary
   const [pendingByEvent, setPendingByEvent] = useState({}) // eventId -> count
   const [unreadCount, setUnreadCount] = useState(0)
+  const [teamModalOpen, setTeamModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -98,6 +100,8 @@ export default function Workspace() {
   )
   const totalPending = Object.values(pendingByEvent).reduce((a, b) => a + b, 0)
 
+  const activeEvent = events.find((e) => String(e.id) === String(activeEventId))
+
   const upcoming = [...events]
     .filter((e) => e.start_date && daysUntil(e.start_date) >= 0)
     .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
@@ -115,13 +119,29 @@ export default function Workspace() {
             Everything across your {events.length} event{events.length === 1 ? '' : 's'}, at a glance.
           </p>
         </div>
-        <Link
-          to="/events"
-          className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all"
-        >
-          + New Event
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setTeamModalOpen(true)}
+            className="bg-card border border-rule hover:border-ink/30 text-ink px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 shadow-xs"
+          >
+            <span>👥</span>
+            <span>Manage Team & Invites</span>
+          </button>
+          <Link
+            to="/events"
+            className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all"
+          >
+            + New Event
+          </Link>
+        </div>
       </div>
+
+      <TeamRosterModal
+        isOpen={teamModalOpen}
+        onClose={() => setTeamModalOpen(false)}
+        eventId={activeEventId || (events[0] ? events[0].id : null)}
+        eventName={activeEvent ? activeEvent.name : events[0] ? events[0].name : ''}
+      />
 
       {eventsLoading ? (
         <p className="text-ink/50 text-sm mt-8">Loading workspace...</p>

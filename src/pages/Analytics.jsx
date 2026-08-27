@@ -13,6 +13,7 @@ import RequireActiveEvent from '../components/RequireActiveEvent'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { generateExecutiveDeck } from '../utils/executiveDeckGenerator'
+import RoiForecastWidget from '../components/RoiForecastWidget'
 
 const DEPT_COLORS = ['#FF7A00', '#2563EB', '#7C3AED', '#10B981', '#F59E0B', '#F43F5E', '#0EA5E9', '#EC4899']
 
@@ -177,6 +178,11 @@ function AnalyticsContent({ eventId }) {
           <p className="text-[11px] font-semibold text-ink/50 uppercase tracking-wide">Budget Utilization</p>
           <p className={`text-lg font-bold mt-1 ${utilPct > 100 ? 'text-deficit-500' : utilPct > 85 ? 'text-warning-500' : 'text-primary-500'}`}>{utilPct}%</p>
         </div>
+      </div>
+
+      {/* AI ROI Forecast Widget */}
+      <div className="mb-6">
+        <RoiForecastWidget eventId={eventId} currency={event.currency} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
