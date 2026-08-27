@@ -23,6 +23,7 @@ import Notifications from './pages/Notifications'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
 import Analytics from './pages/Analytics'
+import Calendar from './pages/Calendar'
 
 export default function App() {
   return (
@@ -50,6 +51,7 @@ export default function App() {
                   <Route path="/events/:id" element={<EventDetail />} />
                   <Route path="/budget" element={<Budget />} />
                   <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/calendar" element={<Calendar />} />
                   <Route path="/expenses" element={<Expenses />} />
                   <Route path="/income" element={<Income />} />
                   <Route path="/vendors" element={<Vendors />} />
