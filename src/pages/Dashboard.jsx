@@ -7,6 +7,7 @@ import * as expensesApi from '../api/expenses'
 import * as incomeApi from '../api/income'
 import * as vendorsApi from '../api/vendors'
 import * as sponsorsApi from '../api/sponsors'
+import * as notificationsApi from '../api/notifications'
 import StatCard from '../components/StatCard'
 import StampBadge from '../components/StampBadge'
 import { EventCountdown, FinancialHealthWidget, EventProgress, DepartmentHealthCards, MyDepartmentCard, PendingApprovals, ActivityTimeline } from '../components/DashboardWidgets'
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const role = useMyRole(activeEventId)
   const [summary, setSummary] = useState(null)
   const [widgetData, setWidgetData] = useState(null)
+  const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -29,10 +31,18 @@ export default function Dashboard() {
     if (!activeEventId) {
       setSummary(null)
       setWidgetData(null)
+      setAlerts([])
       return
     }
     setLoading(true)
     setError('')
+
+    // Generate alerts for active event
+    notificationsApi.generateAlerts(activeEventId)
+      .then(() => notificationsApi.listNotifications())
+      .then((nList) => setAlerts(nList.filter((n) => !n.is_read)))
+      .catch(() => {})
+
     Promise.all([
       eventsApi.getEventSummary(activeEventId),
       departmentsApi.listDepartments(activeEventId),
@@ -55,9 +65,29 @@ export default function Dashboard() {
       <h2 className="font-display text-3xl font-semibold text-ink mb-1">
         Welcome{user?.name ? `, ${user.name}` : ''}
       </h2>
-      <p className="text-sm text-ink/55 mb-8">
+      <p className="text-sm text-ink/55 mb-6">
         {user?.org_name ? `${user.org_name} · ` : ''}Here's how your active event is tracking.
       </p>
+
+      {alerts.length > 0 && (
+        <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">⚠️</span>
+            <div>
+              <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wide">
+                {alerts.length} Active Alert(s) Detected
+              </h4>
+              <p className="text-xs text-ink/80 mt-0.5">{alerts[0].message}</p>
+            </div>
+          </div>
+          <Link
+            to="/notifications"
+            className="text-xs font-bold text-amber-400 hover:text-amber-300 bg-amber-500/20 px-3.5 py-1.5 rounded-lg border border-amber-500/30 whitespace-nowrap"
+          >
+            View All Alerts →
+          </Link>
+        </div>
+      )}
 
       {eventsLoading ? (
         <p className="text-ink/50 text-sm">Loading events...</p>
