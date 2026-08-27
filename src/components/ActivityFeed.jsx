@@ -8,6 +8,9 @@ const ACTION_ICONS = {
   event_imported: '📥',
   budget_imported: '📥',
   event_status_changed: '🔄',
+  task_assigned: '📋',
+  task_updated: '🎯',
+  task_completed: '🎉',
 }
 
 // The backend always works in UTC (datetime.utcnow() in Python, and

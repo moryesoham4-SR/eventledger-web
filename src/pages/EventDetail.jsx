@@ -5,6 +5,7 @@ import * as departmentsApi from '../api/departments'
 import StatCard from '../components/StatCard'
 import StampBadge from '../components/StampBadge'
 import ActivityFeed from '../components/ActivityFeed'
+import DepartmentTasksWidget from '../components/DepartmentTasksWidget'
 import { useActiveEvent } from '../context/EventContext'
 import { useMyRole } from '../hooks/useMyRole'
 import { getErrorMessage, getBlobErrorMessage } from '../api/client'
@@ -93,7 +94,7 @@ export default function EventDetail() {
       toast.success('Event exported')
     } catch (err) {
       toast.error(await getBlobErrorMessage(err, "Couldn't export this event"))
-    } finally {
+    } fontally {
       setExporting(false)
     }
   }
@@ -284,6 +285,10 @@ export default function EventDetail() {
         </div>
 
         <ActivityFeed eventId={id} />
+      </div>
+
+      <div className="mt-6">
+        <DepartmentTasksWidget eventId={id} />
       </div>
 
       {canImportExport && (
