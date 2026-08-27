@@ -60,11 +60,23 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }, [activeEventId])
 
+  const getDesignationBadge = (rLevel) => {
+    if (rLevel === 'event_admin') return <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg bg-primary-500/20 text-primary-400 border border-primary-500/30 inline-flex items-center gap-1.5 shadow-xs">👑 Event Head / Lead</span>
+    if (rLevel === 'co_host') return <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 inline-flex items-center gap-1.5 shadow-xs">⭐ Co-Head</span>
+    if (rLevel === 'finance_head') return <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg bg-positive-500/20 text-positive-400 border border-positive-500/30 inline-flex items-center gap-1.5 shadow-xs">💰 Finance Head</span>
+    if (rLevel === 'dept_head') return <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 inline-flex items-center gap-1.5 shadow-xs">🏷️ Department Head</span>
+    if (rLevel === 'volunteer') return <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg bg-ink/10 text-ink/70 border border-rule inline-flex items-center gap-1.5 shadow-xs">🤝 Volunteer</span>
+    return null
+  }
+
   return (
     <div>
-      <h2 className="font-display text-3xl font-semibold text-ink mb-1">
-        Welcome{user?.name ? `, ${user.name}` : ''}
-      </h2>
+      <div className="flex items-center gap-3 flex-wrap mb-1">
+        <h2 className="font-display text-3xl font-semibold text-ink">
+          Welcome{user?.name ? `, ${user.name}` : ''}
+        </h2>
+        {getDesignationBadge(role.level)}
+      </div>
       <p className="text-sm text-ink/55 mb-6">
         {user?.org_name ? `${user.org_name} · ` : ''}Here's how your active event is tracking.
       </p>
