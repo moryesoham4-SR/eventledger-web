@@ -7,6 +7,7 @@ import StatCard, { formatMoney } from '../components/StatCard'
 import TeamRosterModal from '../components/TeamRosterModal'
 import { useAuth } from '../context/AuthContext'
 import { useActiveEvent } from '../context/EventContext'
+import { useMyRole } from '../hooks/useMyRole'
 
 // Small helper — days until (or since) a date, same convention as EventCountdown
 function daysUntil(dateStr) {
@@ -39,6 +40,7 @@ const TONE_TEXT = {
 export default function Workspace() {
   const { user } = useAuth()
   const { events, activeEventId, setActiveEventId, loading: eventsLoading } = useActiveEvent()
+  const role = useMyRole(activeEventId)
 
   const [summaries, setSummaries] = useState({}) // eventId -> summary
   const [pendingByEvent, setPendingByEvent] = useState({}) // eventId -> count
@@ -100,8 +102,6 @@ export default function Workspace() {
   )
   const totalPending = Object.values(pendingByEvent).reduce((a, b) => a + b, 0)
 
-  const activeEvent = events.find((e) => String(e.id) === String(activeEventId))
-
   const upcoming = [...events]
     .filter((e) => e.start_date && daysUntil(e.start_date) >= 0)
     .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
@@ -120,13 +120,14 @@ export default function Workspace() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setTeamModalOpen(true)}
-            className="bg-card border border-rule hover:border-ink/30 text-ink px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 shadow-xs"
-          >
-            <span>👥</span>
-            <span>Manage Team & Invites</span>
-          </button>
+          {role.canManageInvites && (
+            <button
+              onClick={() => setTeamModalOpen(true)}
+              className="bg-card border border-rule hover:border-primary-500/40 text-ink px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 shadow-xs"
+            >
+              <span>👥</span> Manage Team & Invites
+            </button>
+          )}
           <Link
             to="/events"
             className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all"
@@ -135,13 +136,6 @@ export default function Workspace() {
           </Link>
         </div>
       </div>
-
-      <TeamRosterModal
-        isOpen={teamModalOpen}
-        onClose={() => setTeamModalOpen(false)}
-        eventId={activeEventId || (events[0] ? events[0].id : null)}
-        eventName={activeEvent ? activeEvent.name : events[0] ? events[0].name : ''}
-      />
 
       {eventsLoading ? (
         <p className="text-ink/50 text-sm mt-8">Loading workspace...</p>
@@ -159,19 +153,21 @@ export default function Workspace() {
         <>
           {/* Org-wide rollup */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 mb-8">
-            <StatCard label="Total Actual Income" value={totals.actIncome} currency={currency} tone="positive" />
-            <StatCard label="Total Actual Expense" value={totals.actExpense} currency={currency} tone="negative" />
+            <StatCard label="Total Actual Income" value={totals.actIncome} currency={currency} tone="positive" className="glass-card glow-border" />
+            <StatCard label="Total Actual Expense" value={totals.actExpense} currency={currency} tone="negative" className="glass-card glow-border" />
             <StatCard
               label="Net Position"
               value={totals.profit}
               currency={currency}
               tone={totals.profit >= 0 ? 'positive' : 'negative'}
+              className="glass-card glow-border"
             />
             <StatCard
               label="Pending Approvals"
               value={totalPending}
               tone={totalPending > 0 ? 'warning' : 'neutral'}
               hint={totalPending > 0 ? 'Awaiting your review' : 'All caught up'}
+              className="glass-card glow-border"
             />
           </div>
 
@@ -318,6 +314,14 @@ export default function Workspace() {
           </div>
         </>
       )}
+
+      <TeamRosterModal
+        isOpen={teamModalOpen}
+        onClose={() => setTeamModalOpen(false)}
+        eventId={activeEventId}
+        eventName={events.find((e) => String(e.id) === String(activeEventId))?.name}
+        canManageInvites={role.canManageInvites}
+      />
     </div>
   )
 }

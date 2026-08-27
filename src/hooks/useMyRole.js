@@ -13,13 +13,14 @@ export function useMyRole(eventId) {
     level: null,
     deptId: null,
     canManageDepartments: false,
+    canManageInvites: false,
     canApproveBudget: false,
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!eventId) {
-      setRole({ level: null, deptId: null, canManageDepartments: false, canApproveBudget: false })
+      setRole({ level: null, deptId: null, canManageDepartments: false, canManageInvites: false, canApproveBudget: false })
       setLoading(false)
       return
     }
@@ -31,11 +32,12 @@ export function useMyRole(eventId) {
           level: data.level,
           deptId: data.dept_id,
           canManageDepartments: data.can_manage_departments,
+          canManageInvites: data.can_manage_invites ?? (data.level === 'event_admin' || data.level === 'co_host' || Boolean(data.is_super_admin)),
           canApproveBudget: data.can_approve_budget,
         })
       )
       .catch(() =>
-        setRole({ level: null, deptId: null, canManageDepartments: false, canApproveBudget: false })
+        setRole({ level: null, deptId: null, canManageDepartments: false, canManageInvites: false, canApproveBudget: false })
       )
       .finally(() => setLoading(false))
   }, [eventId])

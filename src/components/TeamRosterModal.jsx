@@ -4,7 +4,7 @@ import * as departmentsApi from '../api/departments'
 import { getErrorMessage } from '../api/client'
 import { useToast } from '../context/ToastContext'
 
-export default function TeamRosterModal({ isOpen, onClose, eventId, eventName }) {
+export default function TeamRosterModal({ isOpen, onClose, eventId, eventName, canManageInvites = true }) {
   const toast = useToast()
   const [team, setTeam] = useState([])
   const [departments, setDepartments] = useState([])
@@ -70,11 +70,13 @@ export default function TeamRosterModal({ isOpen, onClose, eventId, eventName })
 
   if (!isOpen) return null
 
-  const getRoleBadge = (r) => {
-    if (r === 'event_admin') return <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-primary-500/20 text-primary-400 border border-primary-500/30">Co-Host / Admin</span>
-    if (r === 'finance_head') return <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-positive-500/20 text-positive-400 border border-positive-500/30">Finance Head</span>
-    if (r === 'dept_head') return <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">Dept Head</span>
-    return <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-ink/10 text-ink/70 border border-rule">Volunteer</span>
+  const getRoleBadge = (m) => {
+    const r = m.role
+    if (r === 'event_admin') return <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-primary-500/20 text-primary-400 border border-primary-500/30 flex items-center gap-1">👑 Event Head / Lead</span>
+    if (r === 'co_host') return <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">⭐ Co-Head</span>
+    if (r === 'finance_head') return <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-positive-500/20 text-positive-400 border border-positive-500/30 flex items-center gap-1">💰 Finance Head</span>
+    if (r === 'dept_head') return <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">🏷️ {m.dept_name ? `${m.dept_name} Head` : 'Dept Head'}</span>
+    return <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-ink/10 text-ink/70 border border-rule flex items-center gap-1">🤝 Volunteer</span>
   }
 
   return (
@@ -83,16 +85,20 @@ export default function TeamRosterModal({ isOpen, onClose, eventId, eventName })
         {/* Header */}
         <div className="p-5 border-b border-rule flex items-center justify-between">
           <div>
-            <h3 className="font-display text-lg font-semibold text-ink">👥 Team Roster & Role Invites</h3>
-            <p className="text-xs text-ink/60">{eventName ? `Manage co-hosts, department heads & volunteers for ${eventName}` : 'Manage event access'}</p>
+            <h3 className="font-display text-lg font-semibold text-ink">👥 Team Roster & Role Assignments</h3>
+            <p className="text-xs text-ink/60">{eventName ? `Official positions & team roster for ${eventName}` : 'Manage event access'}</p>
           </div>
           <button onClick={onClose} className="text-ink/40 hover:text-ink text-xl font-bold px-2 py-1">✕</button>
         </div>
 
         <div className="p-5 space-y-6 overflow-y-auto">
-          {/* Invite Form */}
-          <form onSubmit={handleInvite} className="p-4 bg-well/50 border border-rule rounded-xl space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-ink/70">Invite New Team Member</h4>
+          {/* Invite Form (Head & Co-Head Only) */}
+          {canManageInvites ? (
+            <form onSubmit={handleInvite} className="p-4 bg-well/50 border border-rule rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-ink/70">Invite New Team Member (Head & Co-Head Only)</h4>
+                <span className="text-[10px] bg-primary-500/20 text-primary-400 font-bold px-2 py-0.5 rounded border border-primary-500/30">Head Authority</span>
+              </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-ink/70 mb-1">Email Address *</label>
@@ -154,6 +160,7 @@ export default function TeamRosterModal({ isOpen, onClose, eventId, eventName })
               </button>
             </div>
           </form>
+          ) : null}
 
           {/* Current Team Roster */}
           <div>
@@ -176,7 +183,7 @@ export default function TeamRosterModal({ isOpen, onClose, eventId, eventName })
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-semibold text-ink">{member.name || member.email}</span>
-                          {getRoleBadge(member.role)}
+                          {getRoleBadge(member)}
                         </div>
                         <p className="text-[11px] text-ink/50 mt-0.5">
                           {member.email} {member.dept_name ? `· Department: ${member.dept_name}` : ''}

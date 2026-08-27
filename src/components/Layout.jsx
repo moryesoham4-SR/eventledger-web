@@ -89,18 +89,6 @@ export default function Layout() {
         </select>
       </div>
 
-      {/* College Fest Quick Access Banner */}
-      <div className="mx-4 my-2 p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 to-primary-500/10 border border-amber-500/20 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-base">🎓</span>
-          <div>
-            <div className="text-xs font-bold text-ink">College Fest Mode</div>
-            <div className="text-[10px] text-ink/60">Campus Competitions & QR Pass</div>
-          </div>
-        </div>
-        <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-1.5 py-0.5 rounded">Active</span>
-      </div>
-
       <nav className="flex-1 overflow-y-auto py-2 space-y-0.5 px-3">
         {navItems.map((item) => {
           const active = location.pathname === item.path
