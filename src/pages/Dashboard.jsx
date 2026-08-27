@@ -17,7 +17,7 @@ import { useMyRole } from '../hooks/useMyRole'
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const { events, activeEventId, loading: eventsLoading } = useActiveEvent()
+  const { events = [], activeEventId, loading: eventsLoading } = useActiveEvent()
   const role = useMyRole(activeEventId)
   const [summary, setSummary] = useState(null)
   const [widgetData, setWidgetData] = useState(null)
@@ -25,7 +25,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const activeEvent = events.find((e) => String(e.id) === String(activeEventId))
+  const activeEvent = (events || []).find((e) => String(e.id) === String(activeEventId))
 
   useEffect(() => {
     if (!activeEventId) {
@@ -40,21 +40,32 @@ export default function Dashboard() {
     // Generate alerts for active event
     notificationsApi.generateAlerts(activeEventId)
       .then(() => notificationsApi.listNotifications())
-      .then((nList) => setAlerts(nList.filter((n) => !n.is_read)))
+      .then((nList) => setAlerts((nList || []).filter((n) => !n.is_read)))
       .catch(() => {})
 
     Promise.all([
-      eventsApi.getEventSummary(activeEventId),
-      departmentsApi.listDepartments(activeEventId),
-      budgetApi.listProposals(activeEventId),
-      expensesApi.listActualExpenses(activeEventId),
-      incomeApi.listActualIncome(activeEventId),
-      vendorsApi.listVendors(activeEventId),
-      sponsorsApi.listSponsors(activeEventId),
+      eventsApi.getEventSummary(activeEventId).catch(() => null),
+      departmentsApi.listDepartments(activeEventId).catch(() => []),
+      budgetApi.listProposals(activeEventId).catch(() => []),
+      expensesApi.listActualExpenses(activeEventId).catch(() => []),
+      incomeApi.listActualIncome(activeEventId).catch(() => []),
+      vendorsApi.listVendors(activeEventId).catch(() => []),
+      sponsorsApi.listSponsors(activeEventId).catch(() => []),
     ])
       .then(([sum, departments, proposals, actualExpenses, actualIncome, vendors, sponsors]) => {
-        setSummary(sum)
-        setWidgetData({ departments, proposals, actualExpenses, actualIncome, vendors, sponsors })
+        if (!sum && (departments || []).length === 0) {
+          setError('Failed to load summary for the active event')
+        } else {
+          setSummary(sum || { est_income: 0, act_income: 0, est_expense: 0, act_expense: 0, profit: 0, variance: 0, budget_utilization: 0 })
+          setWidgetData({
+            departments: departments || [],
+            proposals: proposals || [],
+            actualExpenses: actualExpenses || [],
+            actualIncome: actualIncome || [],
+            vendors: vendors || [],
+            sponsors: sponsors || [],
+          })
+        }
       })
       .catch(() => setError('Failed to load summary for the active event'))
       .finally(() => setLoading(false))
@@ -68,6 +79,8 @@ export default function Dashboard() {
     if (rLevel === 'volunteer') return <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg bg-ink/10 text-ink/70 border border-rule inline-flex items-center gap-1.5 shadow-xs">🤝 Volunteer</span>
     return null
   }
+
+  const safeEvents = Array.isArray(events) ? events : []
 
   return (
     <div>
@@ -103,7 +116,7 @@ export default function Dashboard() {
 
       {eventsLoading ? (
         <p className="text-ink/50 text-sm">Loading events...</p>
-      ) : events.length === 0 ? (
+      ) : safeEvents.length === 0 ? (
         <div className="bg-card border border-rule rounded-xl p-10 text-center">
           <p className="text-ink/70 mb-4">You don't have any events yet.</p>
           <Link
@@ -173,7 +186,7 @@ export default function Dashboard() {
               <div className="mb-6">
                 {role.level === 'dept_head' || role.level === 'volunteer' ? (
                   <MyDepartmentCard
-                    department={widgetData.departments.find((d) => String(d.id) === String(role.deptId))}
+                    department={(widgetData.departments || []).find((d) => String(d.id) === String(role.deptId))}
                     proposals={widgetData.proposals}
                     actualExpenses={widgetData.actualExpenses}
                     currency={activeEvent.currency}
@@ -210,9 +223,9 @@ export default function Dashboard() {
             Manage events →
           </Link>
         </div>
-        {events.length > 0 && (
+        {safeEvents.length > 0 && (
           <div className="bg-card border border-rule rounded-xl divide-y divide-rule">
-            {events.map((ev) => (
+            {safeEvents.map((ev) => (
               <Link
                 key={ev.id}
                 to={`/events/${ev.id}`}

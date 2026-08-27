@@ -24,7 +24,7 @@ const SUPER_ADMIN_NAV_ITEMS = [{ path: '/users', label: 'Users' }]
 
 export default function Layout() {
   const { user, logout } = useAuth()
-  const { events, activeEventId, setActiveEventId } = useActiveEvent()
+  const { events = [], activeEventId, setActiveEventId } = useActiveEvent()
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -37,14 +37,22 @@ export default function Layout() {
     const fetchUnread = () => {
       if (activeEventId) {
         notificationsApi.generateAlerts(activeEventId).catch(() => {})
-        tasksApi.getTasksSummary(activeEventId)
+        tasksApi
+          .getTasksSummary(activeEventId)
           .then((summary) => {
-            const pendingTotal = summary.reduce((acc, d) => acc + Number(d.total_pending || 0), 0)
-            setPendingTaskCount(pendingTotal)
+            if (Array.isArray(summary)) {
+              const pendingTotal = summary.reduce((acc, d) => acc + Number(d?.total_pending || 0), 0)
+              setPendingTaskCount(pendingTotal)
+            } else {
+              setPendingTaskCount(0)
+            }
           })
-          .catch(() => {})
+          .catch(() => setPendingTaskCount(0))
       }
-      notificationsApi.getUnreadCount().then((d) => setUnreadCount(d.count)).catch(() => {})
+      notificationsApi
+        .getUnreadCount()
+        .then((d) => setUnreadCount(d?.count || 0))
+        .catch(() => setUnreadCount(0))
     }
     fetchUnread()
     const interval = setInterval(fetchUnread, 5000) // poll every 5s for instant badge updates
@@ -57,6 +65,8 @@ export default function Layout() {
   }
 
   const handleNavClick = () => setMobileOpen(false)
+
+  const safeEvents = Array.isArray(events) ? events : []
 
   const sidebarContent = (
     <>
@@ -89,8 +99,8 @@ export default function Layout() {
           onChange={(e) => setActiveEventId(e.target.value)}
           className="w-full border border-rule/80 rounded-lg px-2.5 py-1.5 text-sm bg-card text-ink font-medium focus:ring-2 focus:ring-primary-500/30 transition-all"
         >
-          {events.length === 0 && <option value="">No events yet</option>}
-          {events.map((ev) => (
+          {safeEvents.length === 0 && <option value="">No events yet</option>}
+          {safeEvents.map((ev) => (
             <option key={ev.id} value={ev.id}>
               {ev.name}
             </option>
