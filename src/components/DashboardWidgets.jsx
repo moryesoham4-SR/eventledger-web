@@ -146,9 +146,20 @@ export function DepartmentHealthCards({ departments, proposals, actualExpenses, 
           const barColor = { positive: '#10B981', warning: '#F59E0B', negative: '#F43F5E' }[tone]
           return (
             <div key={d.id} className="lift bg-card border border-rule rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color || '#1F6F5C' }} />
-                <span className="text-sm font-semibold text-ink">{d.name}</span>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color || '#1F6F5C' }} />
+                  <span className="text-sm font-semibold text-ink">{d.name}</span>
+                </div>
+                {d.head_name ? (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-primary-500/10 text-primary-400 border border-primary-500/20">
+                    👤 {d.head_name}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                    ⚠️ Head Unassigned
+                  </span>
+                )}
               </div>
               <p className="figure text-sm text-ink/70">
                 {formatMoney(spent, currency)} <span className="text-ink/40">/ {approved ? formatMoney(approved, currency) : 'no budget yet'}</span>
