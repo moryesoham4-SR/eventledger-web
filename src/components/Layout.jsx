@@ -32,12 +32,15 @@ export default function Layout() {
 
   useEffect(() => {
     const fetchUnread = () => {
+      if (activeEventId) {
+        notificationsApi.generateAlerts(activeEventId).catch(() => {})
+      }
       notificationsApi.getUnreadCount().then((d) => setUnreadCount(d.count)).catch(() => {})
     }
     fetchUnread()
-    const interval = setInterval(fetchUnread, 30000) // poll every 30s so it updates even if nothing else does
+    const interval = setInterval(fetchUnread, 5000) // poll every 5s for instant badge updates
     return () => clearInterval(interval)
-  }, [location.pathname])
+  }, [location.pathname, activeEventId])
 
   const handleLogout = () => {
     logout()
@@ -48,11 +51,14 @@ export default function Layout() {
 
   const sidebarContent = (
     <>
-      <div className="p-5 border-b border-rule flex items-center justify-between">
+      <div className="p-5 border-b border-rule/60 flex items-center justify-between">
         <div>
-          <h1 className="font-display text-xl font-semibold text-ink">EventLedger</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-xl font-bold gradient-text tracking-tight">EventLedger AI</h1>
+            <span className="bg-primary-500/10 text-primary-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-primary-500/20">v2.4</span>
+          </div>
           {user && (
-            <p className="text-xs text-ink/60 font-medium mt-0.5">
+            <p className="text-xs text-ink/60 font-medium mt-0.5 truncate max-w-[170px]">
               {user.name || user.email}
             </p>
           )}
@@ -65,14 +71,14 @@ export default function Layout() {
           ✕
         </button>
       </div>
-      <div className="px-5 py-3 border-b border-rule">
+      <div className="px-5 py-3 border-b border-rule/60 bg-well/30">
         <label className="block text-[11px] font-semibold text-ink/50 uppercase tracking-wider mb-1">
           Active Event
         </label>
         <select
           value={activeEventId || ''}
           onChange={(e) => setActiveEventId(e.target.value)}
-          className="w-full border border-rule rounded px-2 py-1.5 text-sm bg-well text-ink"
+          className="w-full border border-rule/80 rounded-lg px-2.5 py-1.5 text-sm bg-card text-ink font-medium focus:ring-2 focus:ring-primary-500/30 transition-all"
         >
           {events.length === 0 && <option value="">No events yet</option>}
           {events.map((ev) => (
@@ -82,7 +88,20 @@ export default function Layout() {
           ))}
         </select>
       </div>
-      <nav className="flex-1 overflow-y-auto py-3">
+
+      {/* College Fest Quick Access Banner */}
+      <div className="mx-4 my-2 p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 to-primary-500/10 border border-amber-500/20 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-base">🎓</span>
+          <div>
+            <div className="text-xs font-bold text-ink">College Fest Mode</div>
+            <div className="text-[10px] text-ink/60">Campus Competitions & QR Pass</div>
+          </div>
+        </div>
+        <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-1.5 py-0.5 rounded">Active</span>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto py-2 space-y-0.5 px-3">
         {navItems.map((item) => {
           const active = location.pathname === item.path
           return (
@@ -90,16 +109,15 @@ export default function Layout() {
               key={item.path}
               to={item.path}
               onClick={handleNavClick}
-              className={`relative flex items-center gap-2.5 px-5 py-2.5 text-sm transition-colors ${
-                active ? 'text-primary-500 font-semibold bg-well' : 'text-ink/60 font-medium hover:text-ink hover:bg-well/50'
+              className={`relative flex items-center gap-2.5 px-3.5 py-2 rounded-lg text-sm transition-all btn-click ${
+                active
+                  ? 'text-primary-400 font-semibold bg-primary-500/10 border border-primary-500/20 shadow-xs'
+                  : 'text-ink/70 font-medium hover:text-ink hover:bg-well/60'
               }`}
             >
-              {/* Ledger-spine tick mark instead of a filled highlight block */}
-              <span
-                className={`absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[3px] rounded-r ${
-                  active ? 'bg-primary-500' : 'bg-transparent'
-                }`}
-              />
+              {active && (
+                <span className="h-2 w-2 rounded-full bg-primary-500 animate-pulse" />
+              )}
               {item.label}
               {item.path === '/notifications' && unreadCount > 0 && (
                 <span className="ml-auto bg-deficit-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 animate-pulse shadow-xs">
@@ -110,10 +128,10 @@ export default function Layout() {
           )
         })}
       </nav>
-      <div className="p-4 border-t border-rule">
+      <div className="p-4 border-t border-rule/60">
         <button
           onClick={handleLogout}
-          className="w-full text-sm text-ink/60 hover:text-deficit-500 text-left"
+          className="w-full text-sm text-ink/60 hover:text-deficit-500 font-medium text-left px-2 py-1 transition-colors"
         >
           Log out
         </button>
@@ -123,7 +141,7 @@ export default function Layout() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen">
-      {/* Mobile top bar — only shown below md breakpoint */}
+      {/* Mobile top bar */}
       <div className="md:hidden flex items-center justify-between bg-card border-b border-rule px-4 py-3">
         <button
           onClick={() => setMobileOpen(true)}
@@ -132,22 +150,22 @@ export default function Layout() {
         >
           ☰
         </button>
-        <h1 className="font-display text-base font-semibold text-ink">EventLedger</h1>
-        <div className="w-6" /> {/* spacer to balance the hamburger button */}
+        <h1 className="font-display text-base font-bold gradient-text">EventLedger AI</h1>
+        <div className="w-6" />
       </div>
 
       {/* Mobile drawer backdrop */}
       {mobileOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/50 z-30"
+          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-30"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
-      {/* Sidebar: fixed drawer on mobile (slides in), static column on desktop */}
+      {/* Sidebar */}
       <aside
         className={`
-          bg-card border-r border-rule flex flex-col
+          bg-card/95 backdrop-blur-md border-r border-rule/60 flex flex-col
           fixed inset-y-0 left-0 w-64 z-40 transform transition-transform duration-200
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
           md:static md:translate-x-0 md:w-64 md:z-auto
@@ -156,7 +174,7 @@ export default function Layout() {
         {sidebarContent}
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-4 md:p-8">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-paper">
         <div key={location.pathname} className="page-in">
           <Outlet />
         </div>

@@ -9,26 +9,30 @@ export function EventProvider({ children }) {
     () => localStorage.getItem('active_event_id') || null
   )
   const [loading, setLoading] = useState(true)
+  const [cache, setCache] = useState({}) // eventId -> summary cache
 
   const refreshEvents = async () => {
-    setLoading(true)
     try {
       const data = await eventsApi.listEvents()
       setEvents(data)
-      // If no active event selected yet, default to the first one
       if (!activeEventId && data.length > 0) {
         setActiveEventId(String(data[0].id))
       }
     } catch (err) {
-      // fail silently — pages will show their own errors
+      // fail silently
     } finally {
       setLoading(false)
     }
   }
 
+  const setCachedData = (key, data) => {
+    setCache((prev) => ({ ...prev, [key]: data }))
+  }
+
+  const getCachedData = (key) => cache[key] || null
+
   useEffect(() => {
     refreshEvents()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -39,7 +43,7 @@ export function EventProvider({ children }) {
 
   return (
     <EventContext.Provider
-      value={{ events, activeEventId, setActiveEventId, loading, refreshEvents }}
+      value={{ events, activeEventId, setActiveEventId, loading, refreshEvents, getCachedData, setCachedData }}
     >
       {children}
     </EventContext.Provider>

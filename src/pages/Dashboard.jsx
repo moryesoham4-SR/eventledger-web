@@ -120,28 +120,34 @@ export default function Dashboard() {
           {error && <div className="mb-4 text-sm text-deficit-500 bg-deficit-50 rounded px-3 py-2">{error}</div>}
 
           {loading || !summary || !widgetData ? (
-            <p className="text-ink/50 text-sm">Loading summary...</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-24 rounded-2xl skeleton" />
+              ))}
+            </div>
           ) : (
             <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <StatCard label="Estimated Income" value={summary.est_income} currency={activeEvent.currency} />
-                <StatCard label="Actual Income" value={summary.act_income} currency={activeEvent.currency} tone="positive" />
-                <StatCard label="Estimated Expense" value={summary.est_expense} currency={activeEvent.currency} />
-                <StatCard label="Actual Expense" value={summary.act_expense} currency={activeEvent.currency} tone="negative" />
+                <StatCard label="Estimated Income" value={summary.est_income} currency={activeEvent.currency} className="glass-card glow-border" />
+                <StatCard label="Actual Income" value={summary.act_income} currency={activeEvent.currency} tone="positive" className="glass-card glow-border" />
+                <StatCard label="Estimated Expense" value={summary.est_expense} currency={activeEvent.currency} className="glass-card glow-border" />
+                <StatCard label="Actual Expense" value={summary.act_expense} currency={activeEvent.currency} tone="negative" className="glass-card glow-border" />
                 <StatCard
-                  label="Profit"
+                  label="Profit / Margin"
                   value={summary.profit}
                   currency={activeEvent.currency}
                   tone={summary.profit >= 0 ? 'positive' : 'negative'}
+                  className="glass-card glow-border"
                 />
                 <StatCard
                   label="Variance vs Budget"
                   value={summary.variance}
                   currency={activeEvent.currency}
                   tone={summary.variance >= 0 ? 'positive' : 'negative'}
+                  className="glass-card glow-border"
                 />
-                <StatCard label="Budget Utilization" value={`${summary.budget_utilization}%`} />
-                <StatCard label="Expected Attendees" value={activeEvent.expected_attendees ?? '—'} />
+                <StatCard label="Budget Utilization" value={`${summary.budget_utilization}%`} className="glass-card glow-border" />
+                <StatCard label="Expected Attendees" value={activeEvent.expected_attendees ?? '—'} className="glass-card glow-border" />
               </div>
 
               <div className={`grid grid-cols-1 gap-4 mb-6 ${role.level === 'event_admin' || role.level === 'finance_head' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
