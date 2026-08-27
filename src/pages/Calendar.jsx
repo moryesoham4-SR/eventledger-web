@@ -147,25 +147,35 @@ function CalendarContent({ eventId }) {
     daysGrid.push(d)
   }
 
+  const pendingTasksCount = tasks.filter((t) => t.status !== 'completed').length
+
   return (
     <div className="space-y-6">
       {/* Header Controls */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="font-display text-3xl font-semibold text-ink flex items-center gap-2">
-            📅 Event Calendar & Work Deadlines
+          <h2 className="font-display text-3xl font-semibold text-ink flex items-center gap-3">
+            <span>📅 Event Calendar & Work Deadlines</span>
+            {pendingTasksCount > 0 && (
+              <span className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                {pendingTasksCount} Pending Task{pendingTasksCount === 1 ? '' : 's'}
+              </span>
+            )}
           </h2>
           <p className="text-sm text-ink/55 mt-0.5">
             Track department task deadlines, event milestones, and team member assignments.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setTaskModalOpen(true)}
-            className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-full transition-all active:scale-95 flex items-center gap-1.5 shadow-xs"
-          >
-            <span>+</span> Assign Work Task
-          </button>
+          {role.canManageWorkTasks && (
+            <button
+              onClick={() => setTaskModalOpen(true)}
+              className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-full transition-all active:scale-95 flex items-center gap-1.5 shadow-xs"
+            >
+              <span>+</span> Assign Work Task
+            </button>
+          )}
         </div>
       </div>
 

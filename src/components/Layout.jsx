@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useActiveEvent } from '../context/EventContext'
 import * as notificationsApi from '../api/notifications'
+import * as tasksApi from '../api/tasks'
 
 const NAV_ITEMS = [
   { path: '/', label: 'Workspace' },
@@ -28,6 +29,7 @@ export default function Layout() {
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [pendingTaskCount, setPendingTaskCount] = useState(0)
 
   const navItems = user?.is_super_admin ? [...NAV_ITEMS, ...SUPER_ADMIN_NAV_ITEMS] : NAV_ITEMS
 
@@ -35,6 +37,12 @@ export default function Layout() {
     const fetchUnread = () => {
       if (activeEventId) {
         notificationsApi.generateAlerts(activeEventId).catch(() => {})
+        tasksApi.getTasksSummary(activeEventId)
+          .then((summary) => {
+            const pendingTotal = summary.reduce((acc, d) => acc + Number(d.total_pending || 0), 0)
+            setPendingTaskCount(pendingTotal)
+          })
+          .catch(() => {})
       }
       notificationsApi.getUnreadCount().then((d) => setUnreadCount(d.count)).catch(() => {})
     }
@@ -108,6 +116,11 @@ export default function Layout() {
                 <span className="h-2 w-2 rounded-full bg-primary-500 animate-pulse" />
               )}
               {item.label}
+              {item.path === '/calendar' && pendingTaskCount > 0 && (
+                <span className="ml-auto bg-amber-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-xs">
+                  {pendingTaskCount > 9 ? '9+' : pendingTaskCount}
+                </span>
+              )}
               {item.path === '/notifications' && unreadCount > 0 && (
                 <span className="ml-auto bg-deficit-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 animate-pulse shadow-xs">
                   {unreadCount > 9 ? '9+' : unreadCount}
@@ -139,34 +152,28 @@ export default function Layout() {
         >
           ☰
         </button>
-        <h1 className="font-display text-base font-bold gradient-text">EventLedger AI</h1>
-        <div className="w-6" />
+        <span className="font-display font-bold text-ink">EventLedger AI</span>
+        <div className="w-6" /> {/* spacer */}
       </div>
 
-      {/* Mobile drawer backdrop */}
+      {/* Mobile drawer */}
       {mobileOpen && (
-        <div
-          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-30"
-          onClick={() => setMobileOpen(false)}
-        />
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setMobileOpen(false)} />
+          <div className="relative w-64 max-w-[80vw] bg-sidebar border-r border-rule flex flex-col h-full z-10 shadow-2xl">
+            {sidebarContent}
+          </div>
+        </div>
       )}
 
-      {/* Sidebar */}
-      <aside
-        className={`
-          bg-card/95 backdrop-blur-md border-r border-rule/60 flex flex-col
-          fixed inset-y-0 left-0 w-64 z-40 transform transition-transform duration-200
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:static md:translate-x-0 md:w-64 md:z-auto
-        `}
-      >
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex flex-col w-64 bg-sidebar border-r border-rule h-full shrink-0">
         {sidebarContent}
       </aside>
 
+      {/* Main content */}
       <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-paper">
-        <div key={location.pathname} className="page-in">
-          <Outlet />
-        </div>
+        <Outlet />
       </main>
     </div>
   )
