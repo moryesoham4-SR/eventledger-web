@@ -16,11 +16,17 @@ export function EventProvider({ children }) {
       const data = await eventsApi.listEvents()
       const safeData = Array.isArray(data) ? data : []
       setEvents(safeData)
-      if (!activeEventId && safeData.length > 0) {
-        setActiveEventId(String(safeData[0].id))
+      if (safeData.length > 0) {
+        const exists = safeData.some((e) => String(e.id) === String(activeEventId))
+        if (!activeEventId || !exists) {
+          setActiveEventId(String(safeData[0].id))
+        }
+      } else {
+        setActiveEventId(null)
       }
     } catch (err) {
       setEvents([])
+      setActiveEventId(null)
     } finally {
       setLoading(false)
     }
@@ -39,6 +45,8 @@ export function EventProvider({ children }) {
   useEffect(() => {
     if (activeEventId) {
       localStorage.setItem('active_event_id', activeEventId)
+    } else {
+      localStorage.removeItem('active_event_id')
     }
   }, [activeEventId])
 
