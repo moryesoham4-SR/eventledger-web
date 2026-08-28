@@ -25,7 +25,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const activeEvent = (events || []).find((e) => String(e.id) === String(activeEventId))
+  const safeEvents = Array.isArray(events) ? events : []
+  const activeEvent = safeEvents.find((e) => String(e.id) === String(activeEventId))
 
   useEffect(() => {
     if (!activeEventId) {
@@ -40,7 +41,7 @@ export default function Dashboard() {
     // Generate alerts for active event
     notificationsApi.generateAlerts(activeEventId)
       .then(() => notificationsApi.listNotifications())
-      .then((nList) => setAlerts((nList || []).filter((n) => !n.is_read)))
+      .then((nList) => setAlerts((Array.isArray(nList) ? nList : []).filter((n) => !n.is_read)))
       .catch(() => {})
 
     Promise.all([
@@ -53,17 +54,18 @@ export default function Dashboard() {
       sponsorsApi.listSponsors(activeEventId).catch(() => []),
     ])
       .then(([sum, departments, proposals, actualExpenses, actualIncome, vendors, sponsors]) => {
-        if (!sum && (departments || []).length === 0) {
+        const safeDepts = Array.isArray(departments) ? departments : []
+        if (!sum && safeDepts.length === 0) {
           setError('Failed to load summary for the active event')
         } else {
           setSummary(sum || { est_income: 0, act_income: 0, est_expense: 0, act_expense: 0, profit: 0, variance: 0, budget_utilization: 0 })
           setWidgetData({
-            departments: departments || [],
-            proposals: proposals || [],
-            actualExpenses: actualExpenses || [],
-            actualIncome: actualIncome || [],
-            vendors: vendors || [],
-            sponsors: sponsors || [],
+            departments: safeDepts,
+            proposals: Array.isArray(proposals) ? proposals : [],
+            actualExpenses: Array.isArray(actualExpenses) ? actualExpenses : [],
+            actualIncome: Array.isArray(actualIncome) ? actualIncome : [],
+            vendors: Array.isArray(vendors) ? vendors : [],
+            sponsors: Array.isArray(sponsors) ? sponsors : [],
           })
         }
       })
@@ -80,7 +82,13 @@ export default function Dashboard() {
     return null
   }
 
-  const safeEvents = Array.isArray(events) ? events : []
+  const safeAlerts = Array.isArray(alerts) ? alerts : []
+  const safeWidgetDepartments = Array.isArray(widgetData?.departments) ? widgetData.departments : []
+  const safeWidgetProposals = Array.isArray(widgetData?.proposals) ? widgetData.proposals : []
+  const safeWidgetExpenses = Array.isArray(widgetData?.actualExpenses) ? widgetData.actualExpenses : []
+  const safeWidgetIncome = Array.isArray(widgetData?.actualIncome) ? widgetData.actualIncome : []
+  const safeWidgetVendors = Array.isArray(widgetData?.vendors) ? widgetData.vendors : []
+  const safeWidgetSponsors = Array.isArray(widgetData?.sponsors) ? widgetData.sponsors : []
 
   return (
     <div>
@@ -94,15 +102,15 @@ export default function Dashboard() {
         {user?.org_name ? `${user.org_name} · ` : ''}Here's how your active event is tracking.
       </p>
 
-      {alerts.length > 0 && (
+      {safeAlerts.length > 0 && (
         <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-fade-in">
           <div className="flex items-center gap-3">
             <span className="text-xl">⚠️</span>
             <div>
               <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wide">
-                {alerts.length} Active Alert(s) Detected
+                {safeAlerts.length} Active Alert(s) Detected
               </h4>
-              <p className="text-xs text-ink/80 mt-0.5">{alerts[0].message}</p>
+              <p className="text-xs text-ink/80 mt-0.5">{safeAlerts[0]?.message}</p>
             </div>
           </div>
           <Link
@@ -179,36 +187,36 @@ export default function Dashboard() {
                 <EventCountdown event={activeEvent} />
                 <FinancialHealthWidget summary={summary} currency={activeEvent.currency} />
                 {(role.level === 'event_admin' || role.level === 'finance_head') && (
-                  <EventProgress departments={widgetData.departments} proposals={widgetData.proposals} />
+                  <EventProgress departments={safeWidgetDepartments} proposals={safeWidgetProposals} />
                 )}
               </div>
 
               <div className="mb-6">
                 {role.level === 'dept_head' || role.level === 'volunteer' ? (
                   <MyDepartmentCard
-                    department={(widgetData.departments || []).find((d) => String(d.id) === String(role.deptId))}
-                    proposals={widgetData.proposals}
-                    actualExpenses={widgetData.actualExpenses}
+                    department={safeWidgetDepartments.find((d) => String(d.id) === String(role.deptId))}
+                    proposals={safeWidgetProposals}
+                    actualExpenses={safeWidgetExpenses}
                     currency={activeEvent.currency}
                   />
                 ) : (
                   <DepartmentHealthCards
-                    departments={widgetData.departments}
-                    proposals={widgetData.proposals}
-                    actualExpenses={widgetData.actualExpenses}
+                    departments={safeWidgetDepartments}
+                    proposals={safeWidgetProposals}
+                    actualExpenses={safeWidgetExpenses}
                     currency={activeEvent.currency}
                   />
                 )}
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-10">
-                <PendingApprovals proposals={widgetData.proposals} currency={activeEvent.currency} canApprove={role.canApproveBudget} />
+                <PendingApprovals proposals={safeWidgetProposals} currency={activeEvent.currency} canApprove={role.canApproveBudget} />
                 <ActivityTimeline
-                  proposals={widgetData.proposals}
-                  actualExpenses={widgetData.actualExpenses}
-                  actualIncome={widgetData.actualIncome}
-                  vendors={widgetData.vendors}
-                  sponsors={widgetData.sponsors}
+                  proposals={safeWidgetProposals}
+                  actualExpenses={safeWidgetExpenses}
+                  actualIncome={safeWidgetIncome}
+                  vendors={safeWidgetVendors}
+                  sponsors={safeWidgetSponsors}
                 />
               </div>
             </>
