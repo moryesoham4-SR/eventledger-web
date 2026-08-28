@@ -173,14 +173,14 @@ export default function Layout() {
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setMobileOpen(false)} />
-          <div className="relative w-64 max-w-[80vw] bg-sidebar border-r border-rule flex flex-col h-full z-10 shadow-2xl">
+          <div className="relative w-64 max-w-[80vw] bg-card bg-[#0F172A] opacity-100 border-r border-rule flex flex-col h-full z-10 shadow-2xl">
             {sidebarContent}
           </div>
         </div>
       )}
 
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-sidebar border-r border-rule h-full shrink-0">
+      <aside className="hidden md:flex flex-col w-64 bg-card bg-[#0F172A] opacity-100 border-r border-rule h-full shrink-0">
         {sidebarContent}
       </aside>
 
