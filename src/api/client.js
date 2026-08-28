@@ -37,7 +37,7 @@ client.interceptors.response.use(
       const isColdStart = !error.response || [502, 503, 504].includes(error.response?.status) || error.code === 'ECONNABORTED'
       if (isColdStart) {
         await new Promise((res) => setTimeout(res, 2500))
-        return client(config)
+        return client.request(config)
       }
     }
 
