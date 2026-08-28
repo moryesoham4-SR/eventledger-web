@@ -29,13 +29,16 @@ export function useMyRole(eventId) {
     usersApi
       .getMyRole(eventId)
       .then((data) => {
-        const canManage = data.level === 'event_admin' || data.level === 'co_host' || Boolean(data.is_super_admin)
+        // Work tasks can strictly be assigned ONLY by Super Admin or Event Admin (Event Head / Lead)
+        const canAssignWork = data.level === 'event_admin' || Boolean(data.is_super_admin)
+        const canManageInvitesOrDepts = data.level === 'event_admin' || data.level === 'co_host' || Boolean(data.is_super_admin)
+
         setRole({
           level: data.level,
           deptId: data.dept_id,
           canManageDepartments: data.can_manage_departments,
-          canManageInvites: data.can_manage_invites ?? canManage,
-          canManageWorkTasks: canManage,
+          canManageInvites: data.can_manage_invites ?? canManageInvitesOrDepts,
+          canManageWorkTasks: canAssignWork,
           canApproveBudget: data.can_approve_budget,
         })
       })

@@ -197,15 +197,17 @@ function DepartmentsContent({ eventId }) {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setActiveDeptId(d.id)
-                        setTaskModalOpen(true)
-                      }}
-                      className="text-xs font-semibold px-3 py-1.5 border border-rule rounded-lg bg-well/60 hover:bg-well text-ink transition-colors flex items-center gap-1"
-                    >
-                      <span>+</span> Assign Work
-                    </button>
+                    {role.canManageWorkTasks && (
+                      <button
+                        onClick={() => {
+                          setActiveDeptId(d.id)
+                          setTaskModalOpen(true)
+                        }}
+                        className="text-xs font-semibold px-3 py-1.5 border border-rule rounded-lg bg-well/60 hover:bg-well text-ink transition-colors flex items-center gap-1"
+                      >
+                        <span>+</span> Assign Work
+                      </button>
+                    )}
 
                     {role.canManageDepartments && (
                       <button
