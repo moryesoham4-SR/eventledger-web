@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import * as sponsorsApi from '../api/sponsors'
 import * as sponsorshipApi from '../api/sponsorship'
+import * as sponsorInstApi from '../api/sponsor_installments'
 import { formatMoney } from '../components/StatCard'
 import RequireActiveEvent from '../components/RequireActiveEvent'
 import { useMyRole } from '../hooks/useMyRole'
+import { useActiveEvent } from '../context/EventContext'
 import { useToast } from '../context/ToastContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { getErrorMessage } from '../api/client'
+import SponsorInstallmentTracker from '../components/SponsorInstallmentTracker'
 
 const TIER_COLORS = {
   Title: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-700',
@@ -20,6 +23,118 @@ const TIER_ICONS = {
   Gold: '🥇',
   Silver: '🥈',
   Bronze: '🥉',
+}
+
+function MasterSponsorReceivables({ eventId, currency = 'INR', canManage, onUpdated }) {
+  const toast = useToast()
+  const [schedule, setSchedule] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const loadSchedule = async () => {
+    if (!eventId) return
+    setLoading(true)
+    try {
+      const data = await sponsorInstApi.getEventSponsorReceivables(eventId)
+      setSchedule(Array.isArray(data) ? data : [])
+    } catch {
+      setSchedule([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadSchedule()
+  }, [eventId])
+
+  if (loading) return <div className="skeleton h-48 rounded-xl" />
+
+  const safeSchedule = Array.isArray(schedule) ? schedule : []
+  const pendingItems = safeSchedule.filter((i) => i.status === 'pending')
+  const receivedItems = safeSchedule.filter((i) => i.status === 'received')
+  const totalPending = pendingItems.reduce((s, i) => s + Number(i.amount || 0), 0)
+  const totalReceived = receivedItems.reduce((s, i) => s + Number(i.amount || 0), 0)
+
+  const handleToggleStatus = async (inst) => {
+    const nextStatus = inst.status === 'received' ? 'pending' : 'received'
+    const today = new Date().toISOString().slice(0, 10)
+    try {
+      await sponsorInstApi.updateSponsorInstallment(inst.id, {
+        status: nextStatus,
+        received_date: nextStatus === 'received' ? today : null,
+      })
+      toast.success(
+        nextStatus === 'received'
+          ? `Received ${formatMoney(inst.amount, currency)}! Synced to Actual Income 💰`
+          : 'Installment marked back to Pending Receivable ⏳'
+      )
+      loadSchedule()
+      onUpdated?.()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to update status'))
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="p-4 bg-card border border-rule rounded-xl">
+          <p className="text-xs text-ink/50 font-semibold uppercase tracking-wider">Scheduled Receivables</p>
+          <p className="text-xl font-bold text-ink mt-1">{safeSchedule.length} Installments</p>
+        </div>
+        <div className="p-4 bg-positive-500/10 border border-positive-500/30 rounded-xl text-positive-300">
+          <p className="text-xs font-semibold uppercase tracking-wider">Received (In Income)</p>
+          <p className="text-xl font-bold mt-1">{formatMoney(totalReceived, currency)}</p>
+        </div>
+        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300">
+          <p className="text-xs font-semibold uppercase tracking-wider">Pending Receivables</p>
+          <p className="text-xl font-bold mt-1">{formatMoney(totalPending, currency)}</p>
+        </div>
+      </div>
+
+      {safeSchedule.length === 0 ? (
+        <div className="bg-card border border-dashed border-rule rounded-xl p-10 text-center">
+          <p className="text-3xl mb-2">🤝</p>
+          <p className="text-sm text-ink/60">No sponsor receivable installments scheduled yet.</p>
+        </div>
+      ) : (
+        <div className="bg-card border border-rule rounded-xl overflow-hidden divide-y divide-rule">
+          {safeSchedule.map((inst) => {
+            const isReceived = inst.status === 'received'
+            return (
+              <div key={inst.id} className="p-4 flex items-center justify-between gap-3 hover:bg-well/30 transition-colors">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-ink text-sm">{inst.sponsor_name}</span>
+                    <span className="text-xs text-ink/50">({inst.sponsor_tier})</span>
+                    <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${isReceived ? 'bg-positive-500/20 text-positive-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                      {isReceived ? 'Received (In Income) ✓' : 'Pending Receivable ⏳'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink/70 font-medium">{inst.installment_name}</p>
+                  <p className="text-[11px] text-ink/50">Due Date: {inst.due_date || 'TBD'} {inst.received_date ? `· Received on ${inst.received_date}` : ''}</p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-ink text-base">{formatMoney(inst.amount, currency)}</span>
+                  {canManage && (
+                    <button
+                      onClick={() => handleToggleStatus(inst)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        isReceived ? 'bg-well text-ink/70 hover:text-ink' : 'bg-positive-600 text-white hover:bg-positive-700 shadow-xs'
+                      }`}
+                    >
+                      {isReceived ? 'Undo' : 'Mark Received ✓'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function SponsorDeliverables({ sponsorId, canManage }) {
@@ -70,51 +185,33 @@ function SponsorDeliverables({ sponsorId, canManage }) {
 
   const handleDelete = async (id) => {
     try {
-      await sponsorshipApi.deleteDeliverable(id)
-      load()
+      await sponsorshipApi.deleteSponsorDeliverable(id)
       toast.success('Deliverable removed')
+      load()
     } catch {
       toast.error("Couldn't remove deliverable")
     }
   }
 
-  const completedCount = deliverables.filter((d) => d.status === 'completed').length
-  const pct = deliverables.length > 0 ? Math.round((completedCount / deliverables.length) * 100) : 0
-
   return (
-    <div className="mt-3 pt-3 border-t border-rule/50">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-ink/70">📋 Deliverables Checklist</span>
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-well text-ink/60 border border-rule">
-            {completedCount}/{deliverables.length} Done ({pct}%)
-          </span>
-        </div>
+    <div className="pt-2 border-t border-rule mt-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-[11px] font-bold uppercase tracking-wider text-ink/50">Sponsor Deliverables & Perks</h4>
         {canManage && (
           <button
             onClick={() => setShowAdd(!showAdd)}
-            className="text-[11px] font-semibold text-primary-600 dark:text-primary-400 hover:underline"
+            className="text-[11px] text-primary-500 hover:text-primary-400 font-semibold"
           >
-            {showAdd ? 'Cancel' : '+ Add Item'}
+            {showAdd ? 'Cancel' : '+ Add Perk'}
           </button>
         )}
       </div>
 
-      {/* Progress Bar */}
-      {deliverables.length > 0 && (
-        <div className="w-full bg-well rounded-full h-1.5 mb-2 overflow-hidden border border-rule/40">
-          <div
-            className="bg-emerald-500 h-1.5 transition-all duration-300 rounded-full"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      )}
-
       {showAdd && (
-        <form onSubmit={handleAdd} className="flex gap-2 mb-2">
+        <form onSubmit={handleAdd} className="flex gap-2">
           <input
-            required
-            placeholder="e.g. Logo on flex banner, 2 Stall Spaces, Social Media post"
+            type="text"
+            placeholder="e.g. Logo on Main Stage Banner"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="flex-1 bg-well border border-rule rounded px-2.5 py-1 text-xs text-ink focus:outline-none focus:border-primary-500"
@@ -167,20 +264,25 @@ function SponsorDeliverables({ sponsorId, canManage }) {
 function SponsorsContent({ eventId }) {
   const toast = useToast()
   const { confirm } = useConfirm()
+  const { activeEvent } = useActiveEvent()
   const { canApproveBudget: canManage } = useMyRole(eventId)
+  const currency = activeEvent?.currency || 'INR'
+  const [tab, setTab] = useState('sponsors')
   const [sponsors, setSponsors] = useState([])
   const [tiers, setTiers] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [expandedSponsorId, setExpandedSponsorId] = useState(null)
 
   const [form, setForm] = useState({
     name: '',
     tier: 'Gold Sponsor',
     contact_name: '',
     contact_email: '',
-    amount: '',
+    promised_amount: '',
+    amount_received: '',
     notes: '',
   })
 
@@ -207,8 +309,8 @@ function SponsorsContent({ eventId }) {
 
   const handleCreate = async (e) => {
     e.preventDefault()
-    if (!form.name || !form.amount) {
-      toast.error('Please enter sponsor name and amount')
+    if (!form.name || !form.promised_amount) {
+      toast.error('Please enter sponsor name and total committed deal amount')
       return
     }
     try {
@@ -219,13 +321,14 @@ function SponsorsContent({ eventId }) {
         tier: form.tier,
         contact_name: form.contact_name || '',
         contact_email: form.contact_email || '',
-        amount: Number(form.amount) || 0,
+        promised_amount: Number(form.promised_amount) || 0,
+        amount_received: Number(form.amount_received) || 0,
         status: 'confirmed',
         notes: form.notes || '',
       })
-      toast.success('Sponsor added successfully')
+      toast.success('Sponsor added! Received deposit synced to Income ledger')
       setShowModal(false)
-      setForm({ name: '', tier: 'Gold Sponsor', contact_name: '', contact_email: '', amount: '', notes: '' })
+      setForm({ name: '', tier: 'Gold Sponsor', contact_name: '', contact_email: '', promised_amount: '', amount_received: '', notes: '' })
       loadData()
     } catch (err) {
       toast.error(getErrorMessage(err, "Couldn't add sponsor"))
@@ -235,7 +338,7 @@ function SponsorsContent({ eventId }) {
   }
 
   const handleDeleteSponsor = async (id) => {
-    if (!(await confirm('Delete this sponsor entry?', { danger: true, confirmLabel: 'Delete' }))) return
+    if (!(await confirm('Delete this sponsor entry and sync out its income entries?', { danger: true, confirmLabel: 'Delete' }))) return
     try {
       await sponsorsApi.deleteSponsor(id)
       toast.success('Sponsor deleted')
@@ -254,248 +357,260 @@ function SponsorsContent({ eventId }) {
       (s.name && String(s.name).toLowerCase().includes(q)) ||
       (s.tier && String(s.tier).toLowerCase().includes(q)) ||
       (s.contact_name && String(s.contact_name).toLowerCase().includes(q)) ||
-      (s.contact_email && String(s.contact_email).toLowerCase().includes(q)) ||
-      (s.amount !== undefined && String(s.amount).includes(q))
+      (s.contact_email && String(s.contact_email).toLowerCase().includes(q))
     )
   })
 
-  const totalRaised = safeSponsors.reduce((sum, s) => sum + Number(s.amount || 0), 0)
+  const totalCommitted = safeSponsors.reduce((sum, s) => sum + Number(s.promised_amount || s.amount || 0), 0)
+  const totalReceived = safeSponsors.reduce((sum, s) => sum + Number(s.amount_received || 0), 0)
+  const totalPending = Math.max(0, totalCommitted - totalReceived)
 
   return (
-    <div>
-      {/* Top Header */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div>
-            <h2 className="font-display text-2xl font-semibold text-ink">Sponsorship Tiers & Tracker</h2>
-            <p className="text-xs text-ink/55 mt-0.5">
-              Total Raised: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatMoney(totalRaised)}</span>
-            </p>
-          </div>
+    <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Top Header Controls */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="font-display text-3xl font-bold text-ink">Sponsors & Receivables</h2>
+          <p className="text-xs text-ink/55 mt-0.5">
+            Committed Deals: <span className="font-bold text-ink">{formatMoney(totalCommitted, currency)}</span> · Received (In Income):{' '}
+            <span className="font-bold text-positive-400">{formatMoney(totalReceived, currency)}</span> · Pending Receivables:{' '}
+            <span className="font-bold text-amber-400">{formatMoney(totalPending, currency)}</span>
+          </p>
+        </div>
 
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search sponsors..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-well border border-rule rounded-full px-3.5 py-1.5 pl-8 text-xs text-ink placeholder:text-ink/40 focus:outline-none focus:border-primary-500 w-48 sm:w-64 transition-all"
-            />
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/40 text-xs">🔍</span>
-            {searchQuery && (
+        <div className="flex items-center bg-card border border-rule p-1 rounded-full text-xs font-semibold shadow-xs">
+          <button
+            onClick={() => setTab('sponsors')}
+            className={`px-4 py-1.5 rounded-full transition-all ${
+              tab === 'sponsors' ? 'bg-primary-600 text-white shadow-xs' : 'text-ink/60 hover:text-ink'
+            }`}
+          >
+            Sponsors & Deliverables
+          </button>
+          <button
+            onClick={() => setTab('receivables')}
+            className={`px-4 py-1.5 rounded-full transition-all ${
+              tab === 'receivables' ? 'bg-primary-600 text-white shadow-xs' : 'text-ink/60 hover:text-ink'
+            }`}
+          >
+            🤝 Master Receivables Schedule
+          </button>
+        </div>
+      </div>
+
+      {tab === 'receivables' && (
+        <MasterSponsorReceivables eventId={eventId} currency={currency} canManage={canManage} onUpdated={loadData} />
+      )}
+
+      {tab === 'sponsors' && (
+        <>
+          <div className="flex items-center justify-between gap-3 flex-wrap bg-card p-4 rounded-2xl border border-rule shadow-xs">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search sponsors..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-well border border-rule rounded-full px-3.5 py-1.5 pl-8 text-xs text-ink placeholder:text-ink/40 focus:outline-none focus:border-primary-500 w-44 sm:w-64 transition-all"
+              />
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/40 text-xs">🔍</span>
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink text-xs">
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {canManage && (
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink text-xs"
+                onClick={() => setShowModal(true)}
+                className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xs active:scale-95 transition-all flex items-center gap-1.5"
               >
-                ✕
+                <span>+</span> Add Sponsor Deal
               </button>
             )}
           </div>
-        </div>
 
-        {canManage && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all shadow-xs"
-          >
-            + Add Sponsor
-          </button>
-        )}
-      </div>
-
-      {/* Tier Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {tiers.map((t) => {
-          const matching = safeSponsors.filter((s) => s.tier && s.tier.toLowerCase().includes(t.tier_name.toLowerCase().split(' ')[0]))
-          const sum = matching.reduce((acc, s) => acc + Number(s.amount || 0), 0)
-          const icon = TIER_ICONS[t.tier_name.split(' ')[0]] || '🏷️'
-
-          return (
-            <div key={t.id} className="bg-card border border-rule rounded-xl p-4 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-display font-semibold text-ink text-sm flex items-center gap-1.5">
-                    <span>{icon}</span> {t.tier_name}
-                  </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-well text-ink/70 border border-rule">
-                    {matching.length} {matching.length === 1 ? 'Sponsor' : 'Sponsors'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-ink/50 mt-1 line-clamp-2">{t.description}</p>
-              </div>
-
-              <div className="mt-3 pt-2 border-t border-rule/50 flex items-center justify-between">
-                <span className="text-[10px] text-ink/50">Raised:</span>
-                <span className="font-bold text-sm text-primary-600 dark:text-primary-400">{formatMoney(sum)}</span>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Main Sponsors List */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="skeleton h-36 rounded-xl" />
-          <div className="skeleton h-36 rounded-xl" />
-        </div>
-      ) : filteredSponsors.length === 0 ? (
-        <div className="bg-card border border-dashed border-rule rounded-xl p-10 text-center">
-          <p className="text-3xl mb-2">🤝</p>
-          <p className="text-sm text-ink/60">
-            {searchQuery ? `No sponsors matching "${searchQuery}"` : 'No sponsors added yet.'}
-          </p>
-          <p className="text-xs text-ink/40 mt-1">Add sponsors and assign deliverables like banners, stalls, and social mentions.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredSponsors.map((sponsor) => {
-            const rawTier = sponsor.tier || 'Bronze'
-            const key = Object.keys(TIER_COLORS).find((k) => rawTier.toLowerCase().includes(k.toLowerCase())) || 'Bronze'
-            const badgeStyle = TIER_COLORS[key] || TIER_COLORS.Bronze
-            const icon = TIER_ICONS[key] || '🏷️'
-
-            return (
-              <div key={sponsor.id} className="bg-card border border-rule rounded-xl p-4 flex flex-col justify-between hover:border-primary-300 transition-all shadow-xs">
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="font-display font-bold text-ink text-base">{sponsor.name}</h4>
-                      {sponsor.contact_name && (
-                        <p className="text-xs text-ink/55 mt-0.5">
-                          👤 {sponsor.contact_name} {sponsor.contact_email ? `· ${sponsor.contact_email}` : ''}
-                        </p>
-                      )}
-                    </div>
-                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border shadow-2xs ${badgeStyle}`}>
-                      {icon} {sponsor.tier}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between bg-well rounded-lg p-2.5 border border-rule/50">
-                    <span className="text-xs text-ink/60 font-medium">Sponsorship Amount</span>
-                    <span className="text-base font-bold font-display text-emerald-600 dark:text-emerald-400">
-                      {formatMoney(sponsor.amount)}
-                    </span>
-                  </div>
-
-                  {/* Deliverables Checklist Component */}
-                  <SponsorDeliverables sponsorId={sponsor.id} canManage={canManage} />
+          {/* Sponsor Creation Modal */}
+          {showModal && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+              <div className="bg-card border border-rule rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl">
+                <div className="flex items-center justify-between border-b border-rule pb-3">
+                  <h3 className="font-display text-lg font-bold text-ink">Add New Sponsor Deal</h3>
+                  <button onClick={() => setShowModal(false)} className="text-ink/40 hover:text-ink text-sm">✕</button>
                 </div>
 
-                {canManage && (
-                  <div className="mt-3 pt-2 border-t border-rule/40 flex justify-end">
-                    <button
-                      onClick={() => handleDeleteSponsor(sponsor.id)}
-                      className="text-xs text-deficit-500 hover:text-deficit-700"
+                <form onSubmit={handleCreate} className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-ink/70 block mb-1">Sponsor Organization Name *</label>
+                    <input
+                      required
+                      placeholder="e.g. Red Bull, Google, TechCorp"
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-ink/70 block mb-1">Sponsorship Tier</label>
+                    <select
+                      value={form.tier}
+                      onChange={(e) => setForm({ ...form, tier: e.target.value })}
+                      className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink font-semibold"
                     >
-                      Delete Sponsor
+                      <option value="Title Sponsor">👑 Title Sponsor</option>
+                      <option value="Gold Sponsor">🥇 Gold Sponsor</option>
+                      <option value="Silver Sponsor">🥈 Silver Sponsor</option>
+                      <option value="Bronze Sponsor">🥉 Bronze Sponsor</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-xs font-semibold text-ink/70 block mb-1">Total Committed Deal (₹) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        placeholder="e.g. 100000"
+                        value={form.promised_amount}
+                        onChange={(e) => setForm({ ...form, promised_amount: e.target.value })}
+                        className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-ink/70 block mb-1">Initial Cash Received (₹)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="e.g. 50000 (or 0 if pending)"
+                        value={form.amount_received}
+                        onChange={(e) => setForm({ ...form, amount_received: e.target.value })}
+                        className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-ink/50 italic">
+                    💡 <strong>Note:</strong> ONLY the initial cash received (if any) will be logged in Actual Income. The remaining balance stays as Pending Receivable!
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-xs font-semibold text-ink/70 block mb-1">Contact Person</label>
+                      <input
+                        placeholder="e.g. John Doe"
+                        value={form.contact_name}
+                        onChange={(e) => setForm({ ...form, contact_name: e.target.value })}
+                        className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-ink/70 block mb-1">Contact Email</label>
+                      <input
+                        type="email"
+                        placeholder="john@sponsor.com"
+                        value={form.contact_email}
+                        onChange={(e) => setForm({ ...form, contact_email: e.target.value })}
+                        className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-3 flex items-center justify-end gap-2 border-t border-rule">
+                    <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-xs font-semibold text-ink/60 hover:text-ink">
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={submitting} className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xs">
+                      {submitting ? 'Saving...' : 'Save Sponsor Deal'}
                     </button>
                   </div>
-                )}
+                </form>
               </div>
-            )
-          })}
-        </div>
-      )}
+            </div>
+          )}
 
-      {/* Modal to Add Sponsor */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card border border-rule rounded-2xl max-w-md w-full p-6 shadow-2xl animate-fade-in">
-            <h3 className="font-display text-lg font-semibold text-ink mb-1">Add Event Sponsor</h3>
-            <p className="text-xs text-ink/60 mb-4">Enter sponsor details and select their sponsorship tier.</p>
+          {/* Sponsors Cards Grid */}
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="skeleton h-48 rounded-2xl" />
+              <div className="skeleton h-48 rounded-2xl" />
+            </div>
+          ) : filteredSponsors.length === 0 ? (
+            <div className="bg-card border border-dashed border-rule rounded-2xl p-10 text-center">
+              <p className="text-3xl mb-2">🤝</p>
+              <p className="text-sm text-ink/60">No sponsor deals created yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {filteredSponsors.map((s) => {
+                const totalDeal = Number(s.promised_amount || s.amount || 0)
+                const recAmt = Number(s.amount_received || 0)
+                const pendAmt = Math.max(0, totalDeal - recAmt)
+                const isExpanded = expandedSponsorId === s.id
+                const simpleTier = s.tier ? s.tier.replace(' Sponsor', '') : 'Bronze'
+                const badgeColor = TIER_COLORS[simpleTier] || TIER_COLORS.Bronze
+                const badgeIcon = TIER_ICONS[simpleTier] || '🥉'
 
-            <form onSubmit={handleCreate} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-ink/70 mb-1">Sponsor Name *</label>
-                <input
-                  required
-                  placeholder="e.g. Red Bull India"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500"
-                />
-              </div>
+                return (
+                  <div key={s.id} className="lift bg-card border border-rule rounded-2xl p-5 space-y-4 shadow-xs">
+                    <div className="flex items-start justify-between gap-3 border-b border-rule pb-3">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-display text-lg font-bold text-ink">{s.name}</h3>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgeColor}`}>
+                            {badgeIcon} {s.tier}
+                          </span>
+                        </div>
+                        <p className="text-xs text-ink/55 mt-0.5">
+                          {s.contact_name} {s.contact_name && s.contact_email ? '·' : ''} {s.contact_email}
+                        </p>
+                      </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-ink/70 mb-1">Sponsorship Tier</label>
-                  <select
-                    value={form.tier}
-                    onChange={(e) => setForm({ ...form, tier: e.target.value })}
-                    className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500"
-                  >
-                    {tiers.length > 0 ? (
-                      tiers.map((t) => (
-                        <option key={t.id} value={t.tier_name}>
-                          {t.tier_name} ({formatMoney(t.min_amount)}+)
-                        </option>
-                      ))
-                    ) : (
-                      <>
-                        <option value="Title Sponsor">👑 Title Sponsor</option>
-                        <option value="Gold Sponsor">🥇 Gold Sponsor</option>
-                        <option value="Silver Sponsor">🥈 Silver Sponsor</option>
-                        <option value="Bronze Sponsor">🥉 Bronze Sponsor</option>
-                      </>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Committed Deal</p>
+                        <p className="figure text-xl font-bold text-ink">{formatMoney(totalDeal, currency)}</p>
+                      </div>
+                    </div>
+
+                    {/* Received vs Pending Financial Badges */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2.5 bg-positive-500/10 border border-positive-500/25 rounded-xl">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-positive-400 block">Received (In Income)</span>
+                        <span className="font-bold text-positive-300 text-sm">{formatMoney(recAmt, currency)}</span>
+                      </div>
+                      <div className="p-2.5 bg-amber-500/10 border border-amber-500/25 rounded-xl">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">Pending Receivable</span>
+                        <span className="font-bold text-amber-300 text-sm">{formatMoney(pendAmt, currency)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <button
+                        onClick={() => setExpandedSponsorId(isExpanded ? null : s.id)}
+                        className="text-xs font-semibold px-3 py-1.5 border border-rule rounded-lg bg-well/60 hover:bg-well text-ink transition-colors flex items-center gap-1"
+                      >
+                        {isExpanded ? 'Hide Staged Installments ▲' : '🤝 Staged Installments & Receivables ▼'}
+                      </button>
+
+                      {canManage && (
+                        <button onClick={() => handleDeleteSponsor(s.id)} className="text-xs text-deficit-500 hover:text-deficit-600 font-semibold px-2 py-1">
+                          Delete
+                        </button>
+                      )}
+                    </div>
+
+                    {isExpanded && (
+                      <SponsorInstallmentTracker sponsor={s} currency={currency} canManage={canManage} onUpdated={loadData} />
                     )}
-                  </select>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-ink/70 mb-1">Amount (₹) *</label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="50000"
-                    value={form.amount}
-                    onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                    className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-ink/70 mb-1">Contact Person Name</label>
-                <input
-                  placeholder="e.g. Rohan Verma"
-                  value={form.contact_name}
-                  onChange={(e) => setForm({ ...form, contact_name: e.target.value })}
-                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-ink/70 mb-1">Contact Email</label>
-                <input
-                  type="email"
-                  placeholder="rohan@redbull.com"
-                  value={form.contact_email}
-                  onChange={(e) => setForm({ ...form, contact_email: e.target.value })}
-                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500"
-                />
-              </div>
-
-              <div className="pt-3 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-ink/70 border border-rule rounded-lg hover:bg-well"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 text-xs font-semibold bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-all"
-                >
-                  {submitting ? 'Adding...' : 'Add Sponsor'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+                    <SponsorDeliverables sponsorId={s.id} canManage={canManage} />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
