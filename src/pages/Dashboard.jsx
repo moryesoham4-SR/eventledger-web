@@ -26,7 +26,12 @@ export default function Dashboard() {
   const [error, setError] = useState('')
 
   const safeEvents = Array.isArray(events) ? events : []
-  const activeEvent = safeEvents.find((e) => String(e.id) === String(activeEventId))
+  const activeEvent = safeEvents.find((e) => String(e?.id) === String(activeEventId))
+
+  const eventCurrency = activeEvent?.currency || 'INR'
+  const eventName = activeEvent?.name || ''
+  const eventId = activeEvent?.id || ''
+  const eventAttendees = activeEvent?.expected_attendees ?? '—'
 
   useEffect(() => {
     if (!activeEventId) {
@@ -41,7 +46,7 @@ export default function Dashboard() {
     // Generate alerts for active event
     notificationsApi.generateAlerts(activeEventId)
       .then(() => notificationsApi.listNotifications())
-      .then((nList) => setAlerts((Array.isArray(nList) ? nList : []).filter((n) => !n.is_read)))
+      .then((nList) => setAlerts((Array.isArray(nList) ? nList : []).filter((n) => !n?.is_read)))
       .catch(() => {})
 
     Promise.all([
@@ -142,12 +147,14 @@ export default function Dashboard() {
         <>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <h3 className="font-display text-xl font-semibold text-ink">{activeEvent.name}</h3>
+              <h3 className="font-display text-xl font-semibold text-ink">{eventName}</h3>
               {activeEvent.status && <StampBadge status={activeEvent.status} size="xs" />}
             </div>
-            <Link to={`/events/${activeEvent.id}`} className="text-sm text-primary-500 hover:text-primary-400">
-              View full event →
-            </Link>
+            {eventId && (
+              <Link to={`/events/${eventId}`} className="text-sm text-primary-500 hover:text-primary-400">
+                View full event →
+              </Link>
+            )}
           </div>
 
           {error && <div className="mb-4 text-sm text-deficit-500 bg-deficit-50 rounded px-3 py-2">{error}</div>}
@@ -161,31 +168,31 @@ export default function Dashboard() {
           ) : (
             <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <StatCard label="Estimated Income" value={summary.est_income} currency={activeEvent.currency} className="glass-card glow-border" />
-                <StatCard label="Actual Income" value={summary.act_income} currency={activeEvent.currency} tone="positive" className="glass-card glow-border" />
-                <StatCard label="Estimated Expense" value={summary.est_expense} currency={activeEvent.currency} className="glass-card glow-border" />
-                <StatCard label="Actual Expense" value={summary.act_expense} currency={activeEvent.currency} tone="negative" className="glass-card glow-border" />
+                <StatCard label="Estimated Income" value={summary.est_income} currency={eventCurrency} className="glass-card glow-border" />
+                <StatCard label="Actual Income" value={summary.act_income} currency={eventCurrency} tone="positive" className="glass-card glow-border" />
+                <StatCard label="Estimated Expense" value={summary.est_expense} currency={eventCurrency} className="glass-card glow-border" />
+                <StatCard label="Actual Expense" value={summary.act_expense} currency={eventCurrency} tone="negative" className="glass-card glow-border" />
                 <StatCard
                   label="Profit / Margin"
                   value={summary.profit}
-                  currency={activeEvent.currency}
+                  currency={eventCurrency}
                   tone={summary.profit >= 0 ? 'positive' : 'negative'}
                   className="glass-card glow-border"
                 />
                 <StatCard
                   label="Variance vs Budget"
                   value={summary.variance}
-                  currency={activeEvent.currency}
+                  currency={eventCurrency}
                   tone={summary.variance >= 0 ? 'positive' : 'negative'}
                   className="glass-card glow-border"
                 />
                 <StatCard label="Budget Utilization" value={`${summary.budget_utilization}%`} className="glass-card glow-border" />
-                <StatCard label="Expected Attendees" value={activeEvent.expected_attendees ?? '—'} className="glass-card glow-border" />
+                <StatCard label="Expected Attendees" value={eventAttendees} className="glass-card glow-border" />
               </div>
 
               <div className={`grid grid-cols-1 gap-4 mb-6 ${role.level === 'event_admin' || role.level === 'finance_head' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                 <EventCountdown event={activeEvent} />
-                <FinancialHealthWidget summary={summary} currency={activeEvent.currency} />
+                <FinancialHealthWidget summary={summary} currency={eventCurrency} />
                 {(role.level === 'event_admin' || role.level === 'finance_head') && (
                   <EventProgress departments={safeWidgetDepartments} proposals={safeWidgetProposals} />
                 )}
@@ -194,23 +201,23 @@ export default function Dashboard() {
               <div className="mb-6">
                 {role.level === 'dept_head' || role.level === 'volunteer' ? (
                   <MyDepartmentCard
-                    department={safeWidgetDepartments.find((d) => String(d.id) === String(role.deptId))}
+                    department={safeWidgetDepartments.find((d) => String(d?.id) === String(role.deptId))}
                     proposals={safeWidgetProposals}
                     actualExpenses={safeWidgetExpenses}
-                    currency={activeEvent.currency}
+                    currency={eventCurrency}
                   />
                 ) : (
                   <DepartmentHealthCards
                     departments={safeWidgetDepartments}
                     proposals={safeWidgetProposals}
                     actualExpenses={safeWidgetExpenses}
-                    currency={activeEvent.currency}
+                    currency={eventCurrency}
                   />
                 )}
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-10">
-                <PendingApprovals proposals={safeWidgetProposals} currency={activeEvent.currency} canApprove={role.canApproveBudget} />
+                <PendingApprovals proposals={safeWidgetProposals} currency={eventCurrency} canApprove={role.canApproveBudget} />
                 <ActivityTimeline
                   proposals={safeWidgetProposals}
                   actualExpenses={safeWidgetExpenses}
