@@ -21,9 +21,11 @@ export class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const errDetail = this.state.error?.stack || this.state.error?.message || String(this.state.error || 'Unknown Error')
+
       return (
         <div className="min-h-screen bg-paper flex items-center justify-center p-6 text-center">
-          <div className="bg-card border border-rule rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-4">
+          <div className="bg-card border border-rule rounded-2xl p-8 max-w-lg w-full shadow-2xl space-y-4">
             <div className="w-14 h-14 bg-amber-500/10 text-amber-400 rounded-full flex items-center justify-center mx-auto text-2xl border border-amber-500/20">
               ⚠️
             </div>
@@ -31,13 +33,11 @@ export class ErrorBoundary extends React.Component {
             <p className="text-sm text-ink/65">
               An unexpected error occurred while loading this page. Click below to reload your session safely.
             </p>
-            {this.state.error?.message && (
-              <div className="bg-well border border-rule/70 rounded-xl p-3 text-left">
-                <p className="text-[11px] font-mono text-deficit-500 break-words">
-                  {this.state.error.message}
-                </p>
-              </div>
-            )}
+            <div className="bg-well border border-rule/70 rounded-xl p-3 text-left max-h-48 overflow-y-auto">
+              <pre className="text-[11px] font-mono text-deficit-500 whitespace-pre-wrap break-words">
+                {errDetail}
+              </pre>
+            </div>
             <div className="flex justify-center gap-3 pt-2">
               <button
                 onClick={this.handleReset}
