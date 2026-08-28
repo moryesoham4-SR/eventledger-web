@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useActiveEvent } from '../context/EventContext'
 import * as notificationsApi from '../api/notifications'
 import * as tasksApi from '../api/tasks'
+import InstallPwaBanner from './InstallPwaBanner'
 
 const NAV_ITEMS = [
   { path: '/', label: 'Workspace' },
@@ -74,7 +75,7 @@ export default function Layout() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="font-display text-xl font-bold gradient-text tracking-tight">EventLedger AI</h1>
-            <span className="bg-primary-500/10 text-primary-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-primary-500/20">v2.4</span>
+            <span className="bg-primary-500/10 text-primary-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-primary-500/20">v2.5 PWA</span>
           </div>
           {user && (
             <p className="text-xs text-ink/60 font-medium mt-0.5 truncate max-w-[170px]">
@@ -107,6 +108,8 @@ export default function Layout() {
           ))}
         </select>
       </div>
+
+      <InstallPwaBanner />
 
       <nav className="flex-1 overflow-y-auto py-2 space-y-0.5 px-3">
         {navItems.map((item) => {
