@@ -14,12 +14,13 @@ export function EventProvider({ children }) {
   const refreshEvents = async () => {
     try {
       const data = await eventsApi.listEvents()
-      setEvents(data)
-      if (!activeEventId && data.length > 0) {
-        setActiveEventId(String(data[0].id))
+      const safeData = Array.isArray(data) ? data : []
+      setEvents(safeData)
+      if (!activeEventId && safeData.length > 0) {
+        setActiveEventId(String(safeData[0].id))
       }
     } catch (err) {
-      // fail silently
+      setEvents([])
     } finally {
       setLoading(false)
     }

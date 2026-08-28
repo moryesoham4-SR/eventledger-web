@@ -1,327 +1,89 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import * as eventsApi from '../api/events'
-import * as notificationsApi from '../api/notifications'
-import * as budgetApi from '../api/budget'
-import StatCard, { formatMoney } from '../components/StatCard'
-import TeamRosterModal from '../components/TeamRosterModal'
-import { useAuth } from '../context/AuthContext'
+import { Link, useNavigate } from 'react-router-dom'
 import { useActiveEvent } from '../context/EventContext'
-import { useMyRole } from '../hooks/useMyRole'
-
-// Small helper — days until (or since) a date, same convention as EventCountdown
-function daysUntil(dateStr) {
-  if (!dateStr) return null
-  return Math.ceil((new Date(dateStr) - new Date()) / 86400000)
-}
-
-function healthFromSummary(summary) {
-  if (!summary) return { status: 'Unknown', tone: 'neutral' }
-  const util = summary.budget_utilization ?? 0
-  if (summary.profit < 0 || util > 100) return { status: 'Over Budget', tone: 'negative' }
-  if (util > 90) return { status: 'Tight', tone: 'warning' }
-  return { status: 'Healthy', tone: 'positive' }
-}
-
-const TONE_DOT = {
-  positive: 'bg-success-500',
-  warning: 'bg-warning-500',
-  negative: 'bg-deficit-500',
-  neutral: 'bg-ink/30',
-}
-
-const TONE_TEXT = {
-  positive: 'text-success-500',
-  warning: 'text-warning-500',
-  negative: 'text-deficit-500',
-  neutral: 'text-ink/50',
-}
+import { useAuth } from '../context/AuthContext'
+import StampBadge from '../components/StampBadge'
 
 export default function Workspace() {
   const { user } = useAuth()
-  const { events, activeEventId, setActiveEventId, loading: eventsLoading } = useActiveEvent()
-  const role = useMyRole(activeEventId)
+  const { events, activeEventId, setActiveEventId, loading } = useActiveEvent()
+  const navigate = useNavigate()
 
-  const [summaries, setSummaries] = useState({}) // eventId -> summary
-  const [pendingByEvent, setPendingByEvent] = useState({}) // eventId -> count
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [teamModalOpen, setTeamModalOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const safeEvents = Array.isArray(events) ? events : []
 
   useEffect(() => {
-    notificationsApi.getUnreadCount().then((d) => setUnreadCount(d.count)).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (!events.length) return
-    let cancelled = false
-    setLoading(true)
-
-    Promise.all(
-      events.map((ev) =>
-        Promise.all([
-          eventsApi.getEventSummary(ev.id).catch(() => null),
-          budgetApi.listProposals(ev.id).catch(() => []),
-        ]).then(([summary, proposals]) => ({
-          id: ev.id,
-          summary,
-          pending: proposals.filter((p) => p.status === 'submitted').length,
-        }))
-      )
-    ).then((results) => {
-      if (cancelled) return
-      const sMap = {}
-      const pMap = {}
-      results.forEach((r) => {
-        sMap[r.id] = r.summary
-        pMap[r.id] = r.pending
-      })
-      setSummaries(sMap)
-      setPendingByEvent(pMap)
-      setLoading(false)
-    })
-
-    return () => {
-      cancelled = true
+    if (!loading && activeEventId) {
+      navigate('/dashboard', { replace: true })
     }
-  }, [events])
+  }, [activeEventId, loading, navigate])
 
-  // ---- org-wide rollups ----
-  const totals = events.reduce(
-    (acc, ev) => {
-      const s = summaries[ev.id]
-      if (!s) return acc
-      acc.estIncome += s.est_income || 0
-      acc.actIncome += s.act_income || 0
-      acc.estExpense += s.est_expense || 0
-      acc.actExpense += s.act_expense || 0
-      acc.profit += s.profit || 0
-      return acc
-    },
-    { estIncome: 0, actIncome: 0, estExpense: 0, actExpense: 0, profit: 0 }
-  )
-  const totalPending = Object.values(pendingByEvent).reduce((a, b) => a + b, 0)
-
-  const upcoming = [...events]
-    .filter((e) => e.start_date && daysUntil(e.start_date) >= 0)
-    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
-
-  const currency = events[0]?.currency || 'INR'
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="skeleton h-12 w-48 rounded-xl" />
+      </div>
+    )
+  }
 
   return (
-    <div>
-      <div className="flex items-start justify-between mb-1 flex-wrap gap-2">
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h2 className="font-display text-3xl font-semibold text-ink mb-1">
-            Workspace{user?.name ? ` · ${user.name}` : user?.org_name ? ` · ${user.org_name}` : ''}
+          <h2 className="font-display text-3xl font-bold text-ink">
+            Welcome to your Workspace{user?.name ? `, ${user.name}` : ''} 👋
           </h2>
-          <p className="text-sm text-ink/55">
-            Everything across your {events.length} event{events.length === 1 ? '' : 's'}, at a glance.
+          <p className="text-sm text-ink/60 mt-1">
+            Select an event below to open its dashboard and start collaborating.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {role.canManageInvites && (
-            <button
-              onClick={() => setTeamModalOpen(true)}
-              className="bg-card border border-rule hover:border-primary-500/40 text-ink px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 shadow-xs"
-            >
-              <span>👥</span> Manage Team & Invites
-            </button>
-          )}
-          <Link
-            to="/events"
-            className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all"
-          >
-            + New Event
-          </Link>
-        </div>
+        <Link
+          to="/events"
+          className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xs transition-all"
+        >
+          + Create New Event
+        </Link>
       </div>
 
-      {eventsLoading ? (
-        <p className="text-ink/50 text-sm mt-8">Loading workspace...</p>
-      ) : events.length === 0 ? (
-        <div className="bg-card border border-rule rounded-xl p-10 text-center mt-8">
-          <p className="text-ink/70 mb-4">You don't have any events yet.</p>
+      {safeEvents.length === 0 ? (
+        <div className="bg-card border border-rule rounded-2xl p-10 text-center space-y-3">
+          <span className="text-4xl">🎉</span>
+          <h3 className="font-display text-lg font-semibold text-ink">No events yet</h3>
+          <p className="text-sm text-ink/60 max-w-sm mx-auto">
+            Get started by creating your first event ledger to track budgets, expenses, and team tasks.
+          </p>
           <Link
             to="/events"
-            className="inline-block bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all"
+            className="inline-block bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-5 py-2.5 rounded-full shadow-xs transition-all"
           >
-            Create your first event
+            Create First Event →
           </Link>
         </div>
       ) : (
-        <>
-          {/* Org-wide rollup */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 mb-8">
-            <StatCard label="Total Actual Income" value={totals.actIncome} currency={currency} tone="positive" className="glass-card glow-border" />
-            <StatCard label="Total Actual Expense" value={totals.actExpense} currency={currency} tone="negative" className="glass-card glow-border" />
-            <StatCard
-              label="Net Position"
-              value={totals.profit}
-              currency={currency}
-              tone={totals.profit >= 0 ? 'positive' : 'negative'}
-              className="glass-card glow-border"
-            />
-            <StatCard
-              label="Pending Approvals"
-              value={totalPending}
-              tone={totalPending > 0 ? 'warning' : 'neutral'}
-              hint={totalPending > 0 ? 'Awaiting your review' : 'All caught up'}
-              className="glass-card glow-border"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Event list — the core of the workspace */}
-            <div className="lg:col-span-2">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-display text-lg font-semibold text-ink">Your Events</h3>
-                {loading && <span className="text-xs text-ink/40">Refreshing…</span>}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {safeEvents.map((ev) => (
+            <div
+              key={ev.id}
+              onClick={() => {
+                setActiveEventId(String(ev.id))
+                navigate('/dashboard')
+              }}
+              className="lift bg-card border border-rule rounded-2xl p-5 hover:border-primary-500/40 cursor-pointer transition-all space-y-3"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-display text-lg font-bold text-ink truncate">{ev.name}</h3>
+                {ev.status && <StampBadge status={ev.status} size="xs" />}
               </div>
-              <div className="space-y-3">
-                {events.map((ev) => {
-                  const s = summaries[ev.id]
-                  const health = healthFromSummary(s)
-                  const days = daysUntil(ev.start_date)
-                  const pending = pendingByEvent[ev.id] || 0
-                  const isActive = String(ev.id) === String(activeEventId)
-
-                  return (
-                    <div
-                      key={ev.id}
-                      className={`lift bg-card border rounded-xl p-4 transition-colors ${
-                        isActive ? 'border-primary-500/60' : 'border-rule'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3 flex-wrap">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Link
-                              to={`/events/${ev.id}`}
-                              className="font-display text-base font-semibold text-ink hover:text-primary-500 truncate"
-                            >
-                              {ev.name}
-                            </Link>
-                            {isActive && (
-                              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-primary-500/15 text-primary-500">
-                                Active
-                              </span>
-                            )}
-                            <span className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${TONE_TEXT[health.tone]} bg-well`}>
-                              <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[health.tone]}`} />
-                              {health.status}
-                            </span>
-                          </div>
-                          <p className="text-xs text-ink/45 mt-1">
-                            {ev.venue ? `${ev.venue} · ` : ''}
-                            {ev.start_date
-                              ? days > 0
-                                ? `in ${days} day${days === 1 ? '' : 's'}`
-                                : days === 0
-                                ? 'Today'
-                                : `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ago`
-                              : 'No date set'}
-                          </p>
-                        </div>
-
-                        {!isActive && (
-                          <button
-                            onClick={() => setActiveEventId(String(ev.id))}
-                            className="text-xs font-semibold text-ink/60 hover:text-primary-500 border border-rule rounded-full px-3 py-1 whitespace-nowrap"
-                          >
-                            Switch to
-                          </button>
-                        )}
-                      </div>
-
-                      {s && (
-                        <div className="grid grid-cols-3 gap-3 mt-4 pt-3 border-t border-rule">
-                          <div>
-                            <p className="text-[10px] font-semibold text-ink/40 uppercase tracking-wide">Profit</p>
-                            <p className={`figure text-sm font-semibold ${s.profit >= 0 ? 'text-success-500' : 'text-deficit-500'}`}>
-                              {formatMoney(s.profit, ev.currency)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-semibold text-ink/40 uppercase tracking-wide">Budget Used</p>
-                            <p className="figure text-sm font-semibold text-ink">{s.budget_utilization}%</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-semibold text-ink/40 uppercase tracking-wide">Pending</p>
-                            <p className={`figure text-sm font-semibold ${pending > 0 ? 'text-warning-500' : 'text-ink'}`}>
-                              {pending}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+              <p className="text-xs text-ink/55">
+                {[ev.venue, ev.start_date].filter(Boolean).join(' · ') || 'No date set'}
+              </p>
+              <div className="pt-2 border-t border-rule/60 flex items-center justify-between text-xs font-semibold text-primary-400">
+                <span>Open Dashboard →</span>
+                <span className="text-[10px] text-ink/40">ID #{ev.id}</span>
               </div>
             </div>
-
-            {/* Right rail: quick links + upcoming */}
-            <div className="space-y-6">
-              <div className="bg-card border border-rule rounded-xl p-4">
-                <h3 className="font-display text-sm font-semibold text-ink mb-3">Quick Links</h3>
-                <div className="flex flex-col gap-1">
-                  <Link to="/budget" className="text-sm text-ink/70 hover:text-primary-500 py-1.5">
-                    Budget Proposals
-                  </Link>
-                  <Link to="/analytics" className="text-sm text-ink/70 hover:text-primary-500 py-1.5">
-                    Analytics
-                  </Link>
-                  <Link to="/notifications" className="text-sm text-ink/70 hover:text-primary-500 py-1.5 flex items-center justify-between">
-                    Notifications
-                    {unreadCount > 0 && (
-                      <span className="bg-primary-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                      </span>
-                    )}
-                  </Link>
-                  <Link to="/vendors" className="text-sm text-ink/70 hover:text-primary-500 py-1.5">
-                    Vendors
-                  </Link>
-                  <Link to="/sponsors" className="text-sm text-ink/70 hover:text-primary-500 py-1.5">
-                    Sponsors
-                  </Link>
-                </div>
-              </div>
-
-              <div className="bg-card border border-rule rounded-xl p-4">
-                <h3 className="font-display text-sm font-semibold text-ink mb-3">Coming Up</h3>
-                {upcoming.length === 0 ? (
-                  <p className="text-xs text-ink/40">No upcoming events on the calendar.</p>
-                ) : (
-                  <div className="space-y-2.5">
-                    {upcoming.slice(0, 5).map((ev) => {
-                      const days = daysUntil(ev.start_date)
-                      return (
-                        <div key={ev.id} className="flex items-center justify-between gap-2">
-                          <Link to={`/events/${ev.id}`} className="text-sm text-ink/80 hover:text-primary-500 truncate">
-                            {ev.name}
-                          </Link>
-                          <span className="text-xs text-ink/40 font-medium whitespace-nowrap">
-                            {days === 0 ? 'Today' : `${days}d`}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </>
+          ))}
+        </div>
       )}
-
-      <TeamRosterModal
-        isOpen={teamModalOpen}
-        onClose={() => setTeamModalOpen(false)}
-        eventId={activeEventId}
-        eventName={events.find((e) => String(e.id) === String(activeEventId))?.name}
-        canManageInvites={role.canManageInvites}
-      />
     </div>
   )
 }
