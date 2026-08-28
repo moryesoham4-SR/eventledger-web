@@ -44,9 +44,11 @@ export function FinancialHealthWidget({ summary, currency }) {
 }
 
 // ---------- Event Progress ----------
-export function EventProgress({ departments, proposals }) {
-  const withApproved = new Set(proposals.filter((p) => p.status === 'approved').map((p) => p.department_id)).size
-  const total = departments.length
+export function EventProgress({ departments = [], proposals = [] }) {
+  const safeDepts = Array.isArray(departments) ? departments : []
+  const safeProposals = Array.isArray(proposals) ? proposals : []
+  const withApproved = new Set(safeProposals.filter((p) => p?.status === 'approved').map((p) => p?.department_id)).size
+  const total = safeDepts.length
   const pct = total ? Math.round((withApproved / total) * 100) : 0
   return (
     <div className="lift bg-card border border-rule rounded-xl p-4">
@@ -61,7 +63,7 @@ export function EventProgress({ departments, proposals }) {
 }
 
 // ---------- My Department (for dept_head / volunteer — their data only) ----------
-export function MyDepartmentCard({ department, proposals, actualExpenses, currency }) {
+export function MyDepartmentCard({ department, proposals = [], actualExpenses = [], currency }) {
   if (!department) {
     return (
       <div className="bg-card border border-rule rounded-xl p-6 text-center">
@@ -70,9 +72,12 @@ export function MyDepartmentCard({ department, proposals, actualExpenses, curren
     )
   }
 
-  const approvedProposals = proposals.filter((p) => p.status === 'approved')
-  const approved = approvedProposals.reduce((s, p) => s + Number(p.total_amount || 0), 0)
-  const spent = actualExpenses.reduce((s, e) => s + Number(e.amount || 0), 0)
+  const safeProposals = Array.isArray(proposals) ? proposals : []
+  const safeExpenses = Array.isArray(actualExpenses) ? actualExpenses : []
+
+  const approvedProposals = safeProposals.filter((p) => p?.status === 'approved')
+  const approved = approvedProposals.reduce((s, p) => s + Number(p?.total_amount || 0), 0)
+  const spent = safeExpenses.reduce((s, e) => s + Number(e?.amount || 0), 0)
   const remaining = approved - spent
   const pct = approved ? Math.round((spent / approved) * 100) : spent > 0 ? 100 : 0
   const tone = pct > 100 ? 'negative' : pct > 80 ? 'warning' : 'positive'
@@ -128,19 +133,24 @@ export function MyDepartmentCard({ department, proposals, actualExpenses, curren
 }
 
 // ---------- Department Health ----------
-export function DepartmentHealthCards({ departments, proposals, actualExpenses, currency }) {
-  if (departments.length === 0) return null
+export function DepartmentHealthCards({ departments = [], proposals = [], actualExpenses = [], currency }) {
+  const safeDepts = Array.isArray(departments) ? departments : []
+  const safeProposals = Array.isArray(proposals) ? proposals : []
+  const safeExpenses = Array.isArray(actualExpenses) ? actualExpenses : []
+
+  if (safeDepts.length === 0) return null
+
   return (
     <div>
       <h3 className="font-display text-lg font-semibold text-ink mb-3">Department Health</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {departments.map((d) => {
-          const approved = proposals
-            .filter((p) => p.department_id === d.id && p.status === 'approved')
-            .reduce((s, p) => s + Number(p.total_amount || 0), 0)
-          const spent = actualExpenses
-            .filter((e) => e.department_id === d.id)
-            .reduce((s, e) => s + Number(e.amount || 0), 0)
+        {safeDepts.map((d) => {
+          const approved = safeProposals
+            .filter((p) => p?.department_id === d.id && p?.status === 'approved')
+            .reduce((s, p) => s + Number(p?.total_amount || 0), 0)
+          const spent = safeExpenses
+            .filter((e) => e?.department_id === d.id)
+            .reduce((s, e) => s + Number(e?.amount || 0), 0)
           const pct = approved ? Math.round((spent / approved) * 100) : spent > 0 ? 100 : 0
           const tone = pct > 100 ? 'negative' : pct > 80 ? 'warning' : 'positive'
           const barColor = { positive: '#10B981', warning: '#F59E0B', negative: '#F43F5E' }[tone]
@@ -178,9 +188,10 @@ export function DepartmentHealthCards({ departments, proposals, actualExpenses, 
 }
 
 // ---------- Pending Approvals ----------
-export function PendingApprovals({ proposals, currency, canApprove }) {
+export function PendingApprovals({ proposals = [], currency, canApprove }) {
   if (!canApprove) return null
-  const pending = proposals.filter((p) => p.status === 'submitted')
+  const safeProposals = Array.isArray(proposals) ? proposals : []
+  const pending = safeProposals.filter((p) => p?.status === 'submitted')
   if (pending.length === 0) return null
   return (
     <div className="bg-card border border-rule rounded-xl p-4">
@@ -210,18 +221,24 @@ export function PendingApprovals({ proposals, currency, canApprove }) {
 }
 
 // ---------- Recent Activity Timeline ----------
-export function ActivityTimeline({ proposals, actualExpenses, actualIncome, vendors, sponsors }) {
+export function ActivityTimeline({ proposals = [], actualExpenses = [], actualIncome = [], vendors = [], sponsors = [] }) {
+  const safeProposals = Array.isArray(proposals) ? proposals : []
+  const safeExpenses = Array.isArray(actualExpenses) ? actualExpenses : []
+  const safeIncome = Array.isArray(actualIncome) ? actualIncome : []
+  const safeVendors = Array.isArray(vendors) ? vendors : []
+  const safeSponsors = Array.isArray(sponsors) ? sponsors : []
+
   const items = []
 
-  proposals.forEach((p) => {
-    if (p.approved_at) items.push({ ts: p.approved_at, dot: '#10B981', text: `${p.dept_name} — "${p.title}" was approved` })
-    if (p.rejected_at) items.push({ ts: p.rejected_at, dot: '#F43F5E', text: `${p.dept_name} — "${p.title}" was rejected` })
-    else if (p.submitted_at) items.push({ ts: p.submitted_at, dot: '#F59E0B', text: `${p.dept_name} submitted "${p.title}" for approval` })
+  safeProposals.forEach((p) => {
+    if (p?.approved_at) items.push({ ts: p.approved_at, dot: '#10B981', text: `${p.dept_name || 'Department'} — "${p.title}" was approved` })
+    if (p?.rejected_at) items.push({ ts: p.rejected_at, dot: '#F43F5E', text: `${p.dept_name || 'Department'} — "${p.title}" was rejected` })
+    else if (p?.submitted_at) items.push({ ts: p.submitted_at, dot: '#F59E0B', text: `${p.dept_name || 'Department'} submitted "${p.title}" for approval` })
   })
-  actualExpenses.forEach((e) => e.created_at && items.push({ ts: e.created_at, dot: '#F43F5E', text: `Expense added — ${e.item_name || e.category}` }))
-  actualIncome.forEach((i) => i.created_at && items.push({ ts: i.created_at, dot: '#10B981', text: `Income recorded — ${i.source}` }))
-  vendors.forEach((v) => v.created_at && items.push({ ts: v.created_at, dot: '#2563EB', text: `Vendor added — ${v.name}` }))
-  sponsors.forEach((s) => s.created_at && items.push({ ts: s.created_at, dot: '#7C3AED', text: `Sponsor added — ${s.name}` }))
+  safeExpenses.forEach((e) => e?.created_at && items.push({ ts: e.created_at, dot: '#F43F5E', text: `Expense added — ${e.item_name || e.category}` }))
+  safeIncome.forEach((i) => i?.created_at && items.push({ ts: i.created_at, dot: '#10B981', text: `Income recorded — ${i.source}` }))
+  safeVendors.forEach((v) => v?.created_at && items.push({ ts: v.created_at, dot: '#2563EB', text: `Vendor added — ${v.name}` }))
+  safeSponsors.forEach((s) => s?.created_at && items.push({ ts: s.created_at, dot: '#7C3AED', text: `Sponsor added — ${s.name}` }))
 
   items.sort((a, b) => new Date(b.ts) - new Date(a.ts))
   const recent = items.slice(0, 8)
