@@ -143,7 +143,7 @@ function ProposalPanel({ proposalId, onChanged, role }) {
           )}
         </div>
 
-        {canEditLineItems && showForm && (
+        {canEditLineItems && showItemForm && (
           <form onSubmit={handleAddItem} className="bg-well border border-rule rounded-lg p-4 mb-4 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <input
