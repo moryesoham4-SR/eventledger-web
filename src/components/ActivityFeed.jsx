@@ -13,12 +13,6 @@ const ACTION_ICONS = {
   task_completed: '🎉',
 }
 
-// The backend always works in UTC (datetime.utcnow() in Python, and
-// activity_log.created_at is a naive Postgres TIMESTAMP on a UTC-timezone
-// DB) but returns it as a bare ISO string with no 'Z' or offset — e.g.
-// "2026-08-25T11:35:22". `new Date(...)` treats a string like that as
-// LOCAL time, not UTC, so without this it displays hours off depending on
-// the viewer's timezone. If the string has no timezone marker, treat it as UTC.
 function toUtcDate(iso) {
   const hasTz = /Z$|[+-]\d{2}:?\d{2}$/.test(iso)
   return new Date(hasTz ? iso : `${iso}Z`)
@@ -45,7 +39,7 @@ export default function ActivityFeed({ eventId }) {
     activityApi
       .listActivity(eventId)
       .then((data) => {
-        if (!cancelled) setItems(data)
+        if (!cancelled) setItems(Array.isArray(data) ? data : [])
       })
       .catch(() => {
         if (!cancelled) setError('Failed to load activity')
@@ -57,6 +51,8 @@ export default function ActivityFeed({ eventId }) {
       cancelled = true
     }
   }, [eventId])
+
+  const safeItems = Array.isArray(items) ? items : []
 
   return (
     <div className="lift bg-card border border-rule rounded-xl p-5">
@@ -70,11 +66,11 @@ export default function ActivityFeed({ eventId }) {
         </div>
       ) : error ? (
         <p className="text-sm text-deficit-600">{error}</p>
-      ) : items.length === 0 ? (
+      ) : safeItems.length === 0 ? (
         <p className="text-sm text-ink/50">Nothing logged yet — actions like budget approvals and imports will show up here.</p>
       ) : (
         <ul className="space-y-3 max-h-80 overflow-y-auto pr-1">
-          {items.map((a) => (
+          {safeItems.map((a) => (
             <li key={a.id} className="flex items-start gap-2.5">
               <span className="text-base leading-none mt-0.5">{ACTION_ICONS[a.action] || '•'}</span>
               <div className="min-w-0">
