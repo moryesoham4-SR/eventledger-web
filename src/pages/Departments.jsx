@@ -7,6 +7,7 @@ import * as usersApi from '../api/users'
 import { useMyRole } from '../hooks/useMyRole'
 import { useToast } from '../context/ToastContext'
 import { getErrorMessage } from '../api/client'
+import DepartmentTeamRosterModal from '../components/DepartmentTeamRosterModal'
 
 function DepartmentsContent({ eventId }) {
   const toast = useToast()
@@ -22,6 +23,9 @@ function DepartmentsContent({ eventId }) {
   const [deptName, setDeptName] = useState('')
   const [headName, setHeadName] = useState('')
   const [deptColor, setDeptColor] = useState('#6366f1')
+
+  // Roster modal
+  const [rosterModalDept, setRosterModalDept] = useState(null)
 
   // Task creation modal
   const [taskModalOpen, setTaskModalOpen] = useState(false)
@@ -67,22 +71,23 @@ function DepartmentsContent({ eventId }) {
         head_name: headName,
         color: deptColor,
       })
-      toast.success('Department created successfully! 🏷️')
+      toast.success('Department created!')
       setCreateModalOpen(false)
       setDeptName('')
       setHeadName('')
+      setDeptColor('#6366f1')
       loadData()
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to create department.'))
+      toast.error(getErrorMessage(err, 'Failed to create department'))
     } finally {
       setSubmitting(false)
     }
   }
 
-  const handleDeleteDept = async (id, name) => {
-    if (!window.confirm(`Delete department "${name}"?`)) return
+  const handleDeleteDept = async (deptId, name) => {
+    if (!window.confirm(`Are you sure you want to delete department "${name}"?`)) return
     try {
-      await departmentsApi.deleteDepartment(id)
+      await departmentsApi.deleteDepartment(deptId)
       toast.success(`Department "${name}" deleted`)
       loadData()
     } catch (err) {
@@ -132,13 +137,13 @@ function DepartmentsContent({ eventId }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto">
       {/* Top Bar */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="font-display text-3xl font-semibold text-ink">🏷️ Departments & Assigned Work</h2>
           <p className="text-sm text-ink/55 mt-0.5">
-            Manage event departments, assigned members, and work deadlines.
+            Manage event departments, Dept Heads, assigned co-workers, and work deadlines.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -197,6 +202,13 @@ function DepartmentsContent({ eventId }) {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setRosterModalDept(d)}
+                      className="text-xs font-semibold px-3 py-1.5 border border-rule rounded-lg bg-well/60 hover:bg-well text-ink transition-colors flex items-center gap-1"
+                    >
+                      <span>👥</span> Team Roster
+                    </button>
+
                     {role.canManageWorkTasks && (
                       <button
                         onClick={() => {
@@ -233,52 +245,68 @@ function DepartmentsContent({ eventId }) {
                         <div key={m.id} className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-well/60 border border-rule text-xs">
                           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: m.avatar_color || '#3B82F6' }} />
                           <span className="font-semibold text-ink">{m.name || m.email}</span>
-                          <span className="text-[10px] text-ink/50">({m.role.replace('_', ' ')})</span>
+                          <span className="text-[10px] text-ink/50">({m.role ? m.role.replace('_', ' ') : 'Member'})</span>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* Assigned Work & Deadlines */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
+                {/* Tasks in Dept */}
+                <div className="pt-2 border-t border-rule space-y-2">
+                  <div className="flex items-center justify-between">
                     <h4 className="text-[11px] font-bold uppercase tracking-wider text-ink/50">
-                      Assigned Tasks & Deadlines ({deptTasks.length})
+                      Work Tasks & Deadlines ({deptTasks.length})
                     </h4>
+                    {role.canManageWorkTasks && (
+                      <button
+                        onClick={() => {
+                          setActiveDeptId(d.id)
+                          setTaskModalOpen(true)
+                        }}
+                        className="text-[11px] text-primary-500 hover:text-primary-400 font-semibold"
+                      >
+                        + Add Work Task
+                      </button>
+                    )}
                   </div>
 
                   {deptTasks.length === 0 ? (
-                    <div className="p-3 bg-well/30 rounded-xl text-xs text-ink/40 text-center">
-                      No active work tasks assigned for this department.
-                    </div>
+                    <p className="text-xs text-ink/40 italic">No tasks assigned for this department yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {deptTasks.map((t) => (
-                        <div key={t.id} className="p-3 bg-well/50 border border-rule rounded-xl flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`font-semibold text-xs text-ink ${t.status === 'completed' ? 'line-through text-ink/40' : ''}`}>
+                        <div
+                          key={t.id}
+                          className="flex items-center justify-between p-2.5 bg-well/50 rounded-xl border border-rule text-xs"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-semibold ${t.status === 'completed' ? 'line-through text-ink/40' : 'text-ink'}`}>
                                 {t.title}
                               </span>
-                              <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                                t.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
-                                t.status === 'in_progress' ? 'bg-amber-500/20 text-amber-400' : 'bg-ink/10 text-ink/60'
-                              }`}>
+                              <span
+                                className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                                  t.status === 'completed'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : t.status === 'in_progress'
+                                    ? 'bg-amber-500/20 text-amber-400'
+                                    : 'bg-ink/10 text-ink/70'
+                                }`}
+                              >
                                 {t.status.replace('_', ' ')}
                               </span>
                             </div>
-                            <p className="text-[11px] text-ink/55 mt-0.5">
-                              👤 {t.assignee_name || t.assigned_to_name || 'Unassigned'}
-                              {t.deadline ? ` · ⏰ Due: ${t.deadline}` : ''}
+                            <p className="text-[11px] text-ink/50">
+                              Assigned to: <span className="font-semibold text-ink/70">{t.assigned_to_name || 'Unassigned'}</span> · Due: {t.deadline || 'No deadline'}
                             </p>
                           </div>
 
                           <button
                             onClick={() => handleToggleTaskStatus(t)}
-                            className="text-[11px] font-semibold px-2.5 py-1 border border-rule rounded-lg bg-card hover:bg-well text-ink transition-colors whitespace-nowrap"
+                            className="text-[11px] font-semibold text-primary-500 hover:text-primary-400 border border-rule bg-card px-2 py-1 rounded-lg"
                           >
-                            {t.status === 'completed' ? 'Reopen' : 'Complete ✓'}
+                            {t.status === 'completed' ? 'Undo' : t.status === 'pending' ? 'Start 🛠️' : 'Done ✓'}
                           </button>
                         </div>
                       ))}
@@ -291,56 +319,56 @@ function DepartmentsContent({ eventId }) {
         </div>
       )}
 
-      {/* Create Dept Modal */}
+      {/* Create Department Modal */}
       {createModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-card border border-rule rounded-2xl w-full max-w-md p-5 space-y-4">
-            <h3 className="font-display text-lg font-semibold text-ink">New Department</h3>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-card border border-rule rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-rule pb-3">
+              <h3 className="font-display text-lg font-bold text-ink">Create New Department</h3>
+              <button onClick={() => setCreateModalOpen(false)} className="text-ink/40 hover:text-ink text-sm">✕</button>
+            </div>
+
             <form onSubmit={handleCreateDept} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-ink/70 mb-1">Department Name *</label>
+                <label className="text-xs font-semibold text-ink/70 block mb-1">Department Name *</label>
                 <input
-                  type="text"
                   required
-                  placeholder="e.g. Marketing, Logistics, Sponsorship"
+                  placeholder="e.g. Art & Decor, Logistics, Technical"
                   value={deptName}
                   onChange={(e) => setDeptName(e.target.value)}
-                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink"
+                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-ink/70 mb-1">Head of Department (Optional)</label>
+                <label className="text-xs font-semibold text-ink/70 block mb-1">Department Head (Optional)</label>
                 <input
-                  type="text"
-                  placeholder="e.g. Sarah Jenkins"
+                  placeholder="e.g. Rahul Sharma"
                   value={headName}
                   onChange={(e) => setHeadName(e.target.value)}
-                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink"
+                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-ink/70 mb-1">Color Theme</label>
-                <input
-                  type="color"
-                  value={deptColor}
-                  onChange={(e) => setDeptColor(e.target.value)}
-                  className="h-10 w-20 border border-rule rounded-lg p-1 bg-card cursor-pointer"
-                />
+                <label className="text-xs font-semibold text-ink/70 block mb-1">Color Badge</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={deptColor}
+                    onChange={(e) => setDeptColor(e.target.value)}
+                    className="w-10 h-10 rounded cursor-pointer border border-rule"
+                  />
+                  <span className="text-xs font-mono text-ink/60">{deptColor}</span>
+                </div>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setCreateModalOpen(false)}
-                  className="text-xs font-semibold px-4 py-2 border border-rule rounded-xl bg-card text-ink"
-                >
+
+              <div className="pt-3 flex items-center justify-end gap-2 border-t border-rule">
+                <button type="button" onClick={() => setCreateModalOpen(false)} className="px-4 py-2 text-xs font-semibold text-ink/60 hover:text-ink">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-xl"
-                >
-                  Save Department
+                <button type="submit" disabled={submitting} className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xs">
+                  {submitting ? 'Creating...' : 'Create Department'}
                 </button>
               </div>
             </form>
@@ -350,82 +378,100 @@ function DepartmentsContent({ eventId }) {
 
       {/* Task Creation Modal */}
       {taskModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-card border border-rule rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
-            <div className="p-5 border-b border-rule flex items-center justify-between">
-              <h3 className="font-display text-lg font-semibold text-ink">📋 Assign Department Work Task</h3>
-              <button onClick={() => setTaskModalOpen(false)} className="text-ink/40 hover:text-ink text-xl font-bold px-2">✕</button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-card border border-rule rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-rule pb-3">
+              <h3 className="font-display text-lg font-bold text-ink">Assign Department Work Task</h3>
+              <button onClick={() => setTaskModalOpen(false)} className="text-ink/40 hover:text-ink text-sm">✕</button>
             </div>
 
-            <form onSubmit={handleCreateTask} className="p-5 space-y-3">
+            <form onSubmit={handleCreateTask} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-ink/70 mb-1">Task Title *</label>
+                <label className="text-xs font-semibold text-ink/70 block mb-1">Task Title *</label>
                 <input
-                  type="text"
                   required
-                  placeholder="e.g. Print 500 Event ID Badges"
+                  placeholder="e.g. Purchase 50m Stage LED Lights"
                   value={taskTitle}
                   onChange={(e) => setTaskTitle(e.target.value)}
-                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink"
+                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink/70 mb-1">Assign to Team Member</label>
+                <label className="text-xs font-semibold text-ink/70 block mb-1">Assign To Co-Worker</label>
                 <select
                   value={taskAssigneeId}
                   onChange={(e) => setTaskAssigneeId(e.target.value)}
-                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink"
+                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink font-semibold"
                 >
-                  <option value="">Select team member...</option>
+                  <option value="">Unassigned</option>
                   {team.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name || m.email} ({m.role.replace('_', ' ')})
+                      {m.name || m.email} ({m.role ? m.role.replace('_', ' ') : 'Member'})
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-ink/70 mb-1">Deadline Date</label>
-                <input
-                  type="date"
-                  value={taskDeadline}
-                  onChange={(e) => setTaskDeadline(e.target.value)}
-                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink"
-                />
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-xs font-semibold text-ink/70 block mb-1">Deadline</label>
+                  <input
+                    type="date"
+                    value={taskDeadline}
+                    onChange={(e) => setTaskDeadline(e.target.value)}
+                    className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-ink/70 block mb-1">Priority</label>
+                  <select
+                    value={taskPriority}
+                    onChange={(e) => setTaskPriority(e.target.value)}
+                    className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink font-semibold"
+                  >
+                    <option value="low">🟢 Low</option>
+                    <option value="medium">🟡 Medium</option>
+                    <option value="high">🔴 High / Urgent</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink/70 mb-1">Description / Notes</label>
+                <label className="text-xs font-semibold text-ink/70 block mb-1">Description / Notes</label>
                 <textarea
                   rows={2}
-                  placeholder="Details for this task..."
+                  placeholder="Task instructions and guidelines..."
                   value={taskDesc}
                   onChange={(e) => setTaskDesc(e.target.value)}
-                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink"
+                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-rule">
-                <button
-                  type="button"
-                  onClick={() => setTaskModalOpen(false)}
-                  className="text-xs font-semibold px-4 py-2 border border-rule rounded-xl bg-card text-ink"
-                >
+              <div className="pt-3 flex items-center justify-end gap-2 border-t border-rule">
+                <button type="button" onClick={() => setTaskModalOpen(false)} className="px-4 py-2 text-xs font-semibold text-ink/60 hover:text-ink">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-xl"
-                >
-                  Assign Work
+                <button type="submit" disabled={submitting} className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xs">
+                  {submitting ? 'Assigning...' : 'Assign Task'}
                 </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {/* Roster Modal */}
+      {rosterModalDept && (
+        <DepartmentTeamRosterModal
+          dept={rosterModalDept}
+          eventId={eventId}
+          eventUsers={team}
+          canManage={role.canManageDepartments || role.level === 'dept_head'}
+          onClose={() => setRosterModalDept(null)}
+          onUpdated={loadData}
+        />
       )}
     </div>
   )
