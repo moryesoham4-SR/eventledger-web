@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as vendorsApi from '../api/vendors'
 import * as milestonesApi from '../api/vendor_milestones'
+import * as departmentsApi from '../api/departments'
 import { formatMoney } from '../components/StatCard'
 import RequireActiveEvent from '../components/RequireActiveEvent'
 import { useMyRole } from '../hooks/useMyRole'
@@ -86,9 +87,14 @@ function MasterPayoutSchedule({ eventId, currency = 'INR', canManage, onUpdated 
             return (
               <div key={m.id} className="p-4 flex items-center justify-between gap-3 hover:bg-well/30 transition-colors">
                 <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-ink text-sm">{m.vendor_name}</span>
                     <span className="text-xs text-ink/50">({m.vendor_category})</span>
+                    {m.dept_name && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 bg-primary-500/15 text-primary-400 rounded-full border border-primary-500/30">
+                        🏢 {m.dept_name}
+                      </span>
+                    )}
                     <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${isPaid ? 'bg-positive-500/20 text-positive-400' : 'bg-amber-500/20 text-amber-400'}`}>
                       {isPaid ? 'Paid ✓' : 'Pending ⏳'}
                     </span>
@@ -123,16 +129,21 @@ function VendorListTab({ eventId, canManage, currency = 'INR' }) {
   const toast = useToast()
   const { confirm } = useConfirm()
   const [vendors, setVendors] = useState([])
+  const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [expandedVendorId, setExpandedVendorId] = useState(null)
-  const [form, setForm] = useState({ name: '', category: 'Other', contact_name: '', contact_email: '', contract_value: '' })
+  const [form, setForm] = useState({ department_id: '', name: '', category: 'Other', contact_name: '', contact_email: '', contract_value: '' })
 
-  const loadVendors = async () => {
+  const loadData = async () => {
     setLoading(true)
     try {
-      const data = await vendorsApi.listVendors(eventId)
-      setVendors(Array.isArray(data) ? data : [])
+      const [vData, dData] = await Promise.all([
+        vendorsApi.listVendors(eventId),
+        departmentsApi.listDepartments(eventId).catch(() => []),
+      ])
+      setVendors(Array.isArray(vData) ? vData : [])
+      setDepartments(Array.isArray(dData) ? dData : [])
     } catch {
       setVendors([])
     } finally {
@@ -141,7 +152,7 @@ function VendorListTab({ eventId, canManage, currency = 'INR' }) {
   }
 
   useEffect(() => {
-    loadVendors()
+    loadData()
   }, [eventId])
 
   const handleCreate = async (e) => {
@@ -149,27 +160,28 @@ function VendorListTab({ eventId, canManage, currency = 'INR' }) {
     try {
       await vendorsApi.createVendor({
         event_id: Number(eventId),
+        department_id: form.department_id ? Number(form.department_id) : null,
         name: form.name,
         category: form.category || 'Other',
         contact_name: form.contact_name,
         contact_email: form.contact_email,
         contract_value: Number(form.contract_value) || 0,
       })
-      setForm({ name: '', category: 'Other', contact_name: '', contact_email: '', contract_value: '' })
+      setForm({ department_id: '', name: '', category: 'Other', contact_name: '', contact_email: '', contract_value: '' })
       setShowForm(false)
-      toast.success('Vendor added')
-      loadVendors()
+      toast.success('Vendor added and contract expense logged!')
+      loadData()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to add vendor'))
     }
   }
 
   const handleDelete = async (id) => {
-    if (!(await confirm('Delete this vendor contract?', { danger: true, confirmLabel: 'Delete' }))) return
+    if (!(await confirm('Delete this vendor contract and sync out its expense entry?', { danger: true, confirmLabel: 'Delete' }))) return
     try {
       await vendorsApi.deleteVendor(id)
-      toast.success('Vendor deleted')
-      loadVendors()
+      toast.success('Vendor and expense record deleted')
+      loadData()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete vendor'))
     }
@@ -194,12 +206,24 @@ function VendorListTab({ eventId, canManage, currency = 'INR' }) {
         <form onSubmit={handleCreate} className="bg-card border border-rule rounded-xl p-5 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input placeholder="Vendor Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-well border border-rule rounded px-3 py-2 text-sm text-ink" />
+            <select
+              value={form.department_id}
+              onChange={(e) => setForm({ ...form, department_id: e.target.value })}
+              className="bg-well border border-rule rounded px-3 py-2 text-sm text-ink font-medium"
+            >
+              <option value="">General Event Vendor (No Specific Dept)</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  🏢 {d.name}
+                </option>
+              ))}
+            </select>
             <input placeholder="Category (e.g. Catering, Stage)" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="bg-well border border-rule rounded px-3 py-2 text-sm text-ink" />
             <input placeholder="Contact Person" value={form.contact_name} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} className="bg-well border border-rule rounded px-3 py-2 text-sm text-ink" />
             <input placeholder="Contact Email" type="email" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} className="bg-well border border-rule rounded px-3 py-2 text-sm text-ink" />
-            <input type="number" step="0.01" placeholder="Contract Value" value={form.contract_value} onChange={(e) => setForm({ ...form, contract_value: e.target.value })} className="bg-well border border-rule rounded px-3 py-2 text-sm text-ink col-span-1 sm:col-span-2" />
+            <input type="number" step="0.01" placeholder="Contract Value (Auto-logs to Expenses)" value={form.contract_value} onChange={(e) => setForm({ ...form, contract_value: e.target.value })} className="bg-well border border-rule rounded px-3 py-2 text-sm text-ink" />
           </div>
-          <button type="submit" className="bg-primary-600 text-white font-semibold px-4 py-2 rounded-full text-sm hover:bg-primary-700">Save Vendor</button>
+          <button type="submit" className="bg-primary-600 text-white font-semibold px-4 py-2 rounded-full text-sm hover:bg-primary-700">Save Vendor & Sync Expense</button>
         </form>
       )}
 
@@ -220,9 +244,14 @@ function VendorListTab({ eventId, canManage, currency = 'INR' }) {
               <div key={v.id} className="bg-card border border-rule rounded-2xl p-5 space-y-4 shadow-xs">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-display text-lg font-bold text-ink">{v.name}</h3>
                       <span className="text-xs font-semibold px-2 py-0.5 bg-well rounded border border-rule text-ink/60">{v.category}</span>
+                      {v.dept_name && (
+                        <span className="text-xs font-semibold px-2.5 py-0.5 bg-primary-500/15 text-primary-400 rounded-full border border-primary-500/30 flex items-center gap-1">
+                          🏢 {v.dept_name}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-ink/55 mt-0.5">
                       {v.contact_name} {v.contact_name && v.contact_email ? '·' : ''} {v.contact_email}
@@ -251,7 +280,7 @@ function VendorListTab({ eventId, canManage, currency = 'INR' }) {
                 </div>
 
                 {isExpanded && (
-                  <VendorMilestoneTracker vendor={v} currency={currency} canManage={canManage} onUpdated={loadVendors} />
+                  <VendorMilestoneTracker vendor={v} currency={currency} canManage={canManage} onUpdated={loadData} />
                 )}
               </div>
             )
@@ -276,7 +305,7 @@ function VendorsContent({ eventId }) {
         <div>
           <h2 className="font-display text-3xl font-bold text-ink">Vendors & Payment Schedule</h2>
           <p className="text-sm text-ink/60 mt-1">
-            Manage vendor contracts, multi-quote comparisons, and 30-50-20 staged payout milestones.
+            Manage department-specific vendor contracts, auto-synced expenses, and 30-50-20 staged payout milestones.
           </p>
         </div>
         <div className="flex items-center bg-card border border-rule p-1 rounded-full text-xs font-semibold shadow-xs">
