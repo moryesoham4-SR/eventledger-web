@@ -1,197 +1,241 @@
 import { useEffect, useRef, useState } from 'react'
 import * as budgetApi from '../api/budget'
 import * as departmentsApi from '../api/departments'
-import { formatMoney } from '../components/StatCard'
 import StampBadge from '../components/StampBadge'
+import { formatMoney } from '../components/StatCard'
 import RequireActiveEvent from '../components/RequireActiveEvent'
+import { useActiveEvent } from '../context/EventContext'
 import { useMyRole } from '../hooks/useMyRole'
 import { getErrorMessage, getBlobErrorMessage } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { useConfirm } from '../context/ConfirmContext'
-import VendorQuoteComparison from '../components/VendorQuoteComparison'
 
 function ProposalPanel({ proposalId, onChanged, role }) {
   const toast = useToast()
   const { confirm, promptText } = useConfirm()
   const [proposal, setProposal] = useState(null)
-  const [showLineForm, setShowLineForm] = useState(false)
-  const [justStamped, setJustStamped] = useState(false)
-  const [line, setLine] = useState({ category: '', item_name: '', description: '', quantity: 1, unit: 'unit', unit_price: '' })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showItemForm, setShowItemForm] = useState(false)
+  const [newItem, setNewItem] = useState({ category: '', item_name: '', description: '', quantity: 1, unit: 'unit', estimated_cost: '' })
 
   const load = async () => {
+    setLoading(true)
     try {
       const data = await budgetApi.getProposal(proposalId)
       setProposal(data)
     } catch {
+      setError("Couldn't load this proposal")
       toast.error("Couldn't load this proposal")
+    } finally {
+      setLoading(false)
     }
   }
 
   useEffect(() => {
     load()
-    setShowLineForm(false)
+    setShowItemForm(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposalId])
 
-  const handleAddLine = async (e) => {
+  if (loading) return <div className="bg-card border border-rule rounded-xl p-8 skeleton h-64" />
+  if (error || !proposal) return <div className="bg-card border border-rule rounded-xl p-8 text-deficit-500 text-sm">{error || 'Proposal not found'}</div>
+
+  const isDraft = proposal.status === 'draft'
+  const isSubmitted = proposal.status === 'submitted'
+  const isDeptHeadOfThis = role.level === 'dept_head' && String(role.deptId) === String(proposal.department_id)
+  const canEditLineItems = isDraft && (role.level === 'event_admin' || role.level === 'finance_head' || isDeptHeadOfThis)
+  const canSubmit = isDraft && (role.level === 'event_admin' || role.level === 'finance_head' || isDeptHeadOfThis)
+  const canApproveOrReject = isSubmitted && role.canApproveBudget
+
+  const handleAddItem = async (e) => {
     e.preventDefault()
     try {
-      const qty = Number(line.quantity) || 1
-      const unitPrice = Number(line.unit_price) || 0
       await budgetApi.addLineItem({
-        proposal_id: Number(proposalId),
-        category: line.category,
-        item_name: line.item_name,
-        description: line.description,
-        quantity: qty,
-        unit: line.unit,
-        unit_price: unitPrice,
-        total_amount: qty * unitPrice,
+        proposal_id: proposalId,
+        ...newItem,
+        quantity: Number(newItem.quantity) || 1,
+        estimated_cost: Number(newItem.estimated_cost),
       })
-      setLine({ category: '', item_name: '', description: '', quantity: 1, unit: 'unit', unit_price: '' })
-      setShowLineForm(false)
+      setNewItem({ category: '', item_name: '', description: '', quantity: 1, unit: 'unit', estimated_cost: '' })
+      setShowItemForm(false)
       load()
+      onChanged?.()
       toast.success('Line item added')
     } catch (err) {
       toast.error(getErrorMessage(err, "Couldn't add that line item"))
     }
   }
 
-  const handleDeleteLine = async (id) => {
+  const handleRemoveItem = async (itemId) => {
     if (!(await confirm('Remove this line item?', { danger: true, confirmLabel: 'Remove' }))) return
     try {
-      await budgetApi.deleteLineItem(id)
+      await budgetApi.removeLineItem(itemId)
       load()
+      onChanged?.()
       toast.success('Line item removed')
     } catch (err) {
       toast.error(getErrorMessage(err, "Couldn't remove that line item"))
     }
   }
 
-  const ACTION_SUCCESS = {
-    submit: 'Sent for approval',
-    approve: 'Budget Approved Successfully 🎉',
-    reject: 'Budget rejected',
-  }
-
-  const handleAction = async (action) => {
+  const handleStatusChange = async (action, note = '') => {
     try {
       if (action === 'submit') await budgetApi.submitProposal(proposalId)
-      if (action === 'approve') await budgetApi.approveProposal(proposalId)
-      if (action === 'reject') {
-        const reason = (await promptText('Reason for rejection?', { placeholder: 'e.g. over budget, missing quote', confirmLabel: 'Reject' })) || ''
-        await budgetApi.rejectProposal(proposalId, reason)
-      }
-      await load()
-      setJustStamped(true)
-      setTimeout(() => setJustStamped(false), 500)
+      else if (action === 'approve') await budgetApi.approveProposal(proposalId, note)
+      else if (action === 'reject') await budgetApi.rejectProposal(proposalId, note)
+      load()
       onChanged?.()
-      toast[action === 'reject' ? 'info' : 'success'](ACTION_SUCCESS[action])
+      toast.success(`Proposal marked as ${action}d!`)
     } catch (err) {
       toast.error(getErrorMessage(err, `Couldn't ${action} this proposal`))
     }
   }
 
-  if (!proposal)
-    return <div className="h-48 skeleton rounded-xl" />
-
-  const lineTotal = (proposal.line_items || []).reduce((s, li) => s + Number(li.total_amount || 0), 0)
-  const canApprove = role?.canApproveBudget
-  const canEdit =
-    role?.level === 'event_admin' ||
-    role?.level === 'finance_head' ||
-    (role?.level === 'dept_head' && String(role?.deptId) === String(proposal.department_id))
+  const handleRejectPrompt = async () => {
+    const reason = await promptText('Reason for rejection (optional):', {
+      title: 'Reject Proposal',
+      placeholder: 'e.g. Total cost exceeds allocated department cap',
+      confirmLabel: 'Reject Proposal',
+      danger: true,
+    })
+    if (reason === null) return
+    handleStatusChange('reject', reason || '')
+  }
 
   return (
-    <div className="lift bg-card border border-rule rounded-xl p-5">
-      <div className="flex items-start justify-between gap-3 mb-1">
+    <div className="bg-card border border-rule rounded-xl p-6 space-y-6">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h3 className="font-display font-semibold text-ink text-lg">{proposal.title}</h3>
-          <p className="text-xs text-ink/50 mt-0.5">{proposal.dept_name || 'No department'}</p>
+          <div className="flex items-center gap-2">
+            <h3 className="font-display text-xl font-bold text-ink">{proposal.title}</h3>
+            <StampBadge status={proposal.status} size="sm" />
+          </div>
+          <p className="text-xs text-ink/50 mt-1">
+            Department: <span className="font-semibold text-ink/80">{proposal.dept_name}</span>
+            {proposal.notes && ` · ${proposal.notes}`}
+          </p>
         </div>
-        <StampBadge status={proposal.status} size="sm" animate={justStamped} />
+        <div className="text-right">
+          <p className="text-[11px] font-semibold text-ink/50 uppercase tracking-wider">Total Proposed</p>
+          <p className="figure text-2xl font-bold text-primary-400">{formatMoney(proposal.total_amount)}</p>
+        </div>
       </div>
-      {proposal.notes && <p className="text-sm text-ink/70 mt-2">{proposal.notes}</p>}
 
-      <div className="flex flex-wrap gap-2 mt-4 mb-4">
-        {proposal.status === 'draft' && canEdit && (
-          <button onClick={() => handleAction('submit')} className="text-xs bg-primary-600 text-white px-3.5 py-1.5 rounded-full font-semibold hover:bg-primary-700 active:scale-95 transition-all">
-            Send for approval →
+      {proposal.rejection_reason && (
+        <div className="bg-deficit-500/10 border border-deficit-500/30 rounded-lg p-3 text-xs text-deficit-400">
+          <span className="font-bold uppercase tracking-wider block mb-0.5">Rejection Note:</span>
+          {proposal.rejection_reason}
+        </div>
+      )}
+
+      {/* Line Items Table */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-display text-sm font-semibold text-ink">Line Items ({proposal.line_items?.length || 0})</h4>
+          {canEditLineItems && (
+            <button
+              onClick={() => setShowItemForm(!showItemForm)}
+              className="text-xs text-primary-500 hover:text-primary-400 font-semibold"
+            >
+              {showItemForm ? 'Cancel' : '+ Add Line Item'}
+            </button>
+          )}
+        </div>
+
+        {canEditLineItems && showForm && (
+          <form onSubmit={handleAddItem} className="bg-well border border-rule rounded-lg p-4 mb-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <input
+                placeholder="Category (e.g. Equipment, Travel)"
+                required
+                value={newItem.category}
+                onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+                className="bg-card border border-rule rounded px-3 py-1.5 text-xs text-ink"
+              />
+              <input
+                placeholder="Item Name"
+                required
+                value={newItem.item_name}
+                onChange={(e) => setNewItem({ ...newItem, item_name: e.target.value })}
+                className="bg-card border border-rule rounded px-3 py-1.5 text-xs text-ink"
+              />
+              <input
+                type="number"
+                placeholder="Qty"
+                value={newItem.quantity}
+                onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+                className="bg-card border border-rule rounded px-3 py-1.5 text-xs text-ink"
+              />
+              <input
+                type="number"
+                step="0.01"
+                placeholder="Cost per unit"
+                required
+                value={newItem.estimated_cost}
+                onChange={(e) => setNewItem({ ...newItem, estimated_cost: e.target.value })}
+                className="bg-card border border-rule rounded px-3 py-1.5 text-xs text-ink"
+              />
+            </div>
+            <button type="submit" className="bg-primary-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-primary-700">
+              Add Item
+            </button>
+          </form>
+        )}
+
+        {proposal.line_items?.length === 0 ? (
+          <p className="text-xs text-ink/40 py-4 text-center border border-dashed border-rule rounded-lg">No line items added yet.</p>
+        ) : (
+          <div className="border border-rule rounded-lg overflow-hidden divide-y divide-rule">
+            {proposal.line_items.map((item) => (
+              <div key={item.id} className="flex items-center justify-between p-3 text-xs">
+                <div>
+                  <p className="font-semibold text-ink">{item.item_name}</p>
+                  <p className="text-[11px] text-ink/50">
+                    {item.category} · {item.quantity} × {formatMoney(item.estimated_cost)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-ink">{formatMoney(item.total_cost)}</span>
+                  {canEditLineItems && (
+                    <button onClick={() => handleRemoveItem(item.id)} className="text-deficit-500 hover:text-deficit-600">
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center justify-end gap-2 pt-2 border-t border-rule">
+        {canSubmit && (
+          <button
+            onClick={() => handleStatusChange('submit')}
+            className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xs active:scale-95 transition-all"
+          >
+            Submit for Approval →
           </button>
         )}
-        {proposal.status === 'submitted' && canApprove && (
+        {canApproveOrReject && (
           <>
-            <button onClick={() => handleAction('approve')} className="text-xs bg-primary-600 text-white px-3.5 py-1.5 rounded-full font-semibold hover:bg-primary-700 active:scale-95 transition-all">
-              ✓ Approve
+            <button
+              onClick={handleRejectPrompt}
+              className="border border-deficit-500/30 text-deficit-400 hover:bg-deficit-500/10 text-xs font-semibold px-4 py-2 rounded-full transition-all"
+            >
+              Reject Proposal
             </button>
-            <button onClick={() => handleAction('reject')} className="text-xs bg-deficit-500 text-white px-3.5 py-1.5 rounded-full font-semibold hover:bg-deficit-700 active:scale-95 transition-all">
-              ✕ Reject
+            <button
+              onClick={() => handleStatusChange('approve')}
+              className="bg-positive-600 hover:bg-positive-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xs active:scale-95 transition-all"
+            >
+              Approve Proposal ✓
             </button>
           </>
         )}
-        {proposal.status === 'submitted' && !canApprove && (
-          <span className="text-xs text-ink/40 italic self-center">Sitting with finance/admin for approval ⏳</span>
-        )}
-        {proposal.status === 'draft' && canEdit && (
-          <button onClick={() => setShowLineForm(!showLineForm)} className="text-xs border border-rule px-3.5 py-1.5 rounded-full font-semibold text-ink/70 hover:border-primary-400 hover:text-primary-500 transition-colors">
-            {showLineForm ? 'Cancel' : '+ Line item'}
-          </button>
-        )}
       </div>
-
-      {showLineForm && canEdit && (
-        <form onSubmit={handleAddLine} className="bg-well border border-rule rounded-xl p-4 mb-4 space-y-2">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <input placeholder="Category" required value={line.category} onChange={(e) => setLine({ ...line, category: e.target.value })} className="bg-well border border-rule rounded-lg px-2.5 py-1.5 text-sm bg-well" />
-            <input placeholder="Item name" value={line.item_name} onChange={(e) => setLine({ ...line, item_name: e.target.value })} className="bg-well border border-rule rounded-lg px-2.5 py-1.5 text-sm bg-well" />
-            <input placeholder="Unit (e.g. pcs)" value={line.unit} onChange={(e) => setLine({ ...line, unit: e.target.value })} className="bg-well border border-rule rounded-lg px-2.5 py-1.5 text-sm bg-well" />
-            <input type="number" step="0.01" placeholder="Quantity" value={line.quantity} onChange={(e) => setLine({ ...line, quantity: e.target.value })} className="bg-well border border-rule rounded-lg px-2.5 py-1.5 text-sm bg-well" />
-            <input type="number" step="0.01" placeholder="Unit price" required value={line.unit_price} onChange={(e) => setLine({ ...line, unit_price: e.target.value })} className="bg-well border border-rule rounded-lg px-2.5 py-1.5 text-sm bg-well" />
-            <input placeholder="Description" value={line.description} onChange={(e) => setLine({ ...line, description: e.target.value })} className="bg-well border border-rule rounded-lg px-2.5 py-1.5 text-sm bg-well" />
-          </div>
-          <button type="submit" className="bg-primary-600 text-white px-3.5 py-1.5 rounded-full text-xs font-semibold hover:bg-primary-700 active:scale-95 transition-all">
-            Add line item
-          </button>
-        </form>
-      )}
-
-      {(proposal.line_items || []).length === 0 ? (
-        <p className="text-sm text-ink/50">No line items yet.</p>
-      ) : (
-        <div className="bg-well border border-rule rounded-xl divide-y divide-rule overflow-hidden">
-          {proposal.line_items.map((li) => (
-            <div key={li.id} className="flex items-center justify-between px-4 py-2.5">
-              <div>
-                <p className="text-sm font-medium text-ink">
-                  {li.item_name || li.category} <span className="text-xs font-normal text-ink/40">· {li.category}</span>
-                </p>
-                <p className="figure text-xs text-ink/50">
-                  {li.quantity} {li.unit} × {formatMoney(li.unit_price)}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="figure text-sm font-semibold text-ink">{formatMoney(li.total_amount)}</span>
-                {proposal.status === 'draft' && canEdit && (
-                  <button onClick={() => handleDeleteLine(li.id)} className="text-xs text-deficit-500 hover:text-deficit-600 font-medium">
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-          <div className="flex items-center justify-between px-4 py-2.5 bg-well">
-            <span className="text-sm font-semibold text-ink/70">Total</span>
-            <span className="figure text-sm font-bold text-ink">{formatMoney(proposal.total_amount || lineTotal)}</span>
-          </div>
-        </div>
-      )}
-
-      <VendorQuoteComparison
-        proposalId={proposalId}
-        currency={proposal.currency || 'INR'}
-        canEdit={canEdit && proposal.status === 'draft'}
-        onQuotesUpdated={() => load()}
-      />
     </div>
   )
 }
@@ -206,29 +250,32 @@ function BudgetContent({ eventId }) {
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [deptFilter, setDeptFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [form, setForm] = useState({ department_id: '', title: '', notes: '' })
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
   const fileInputRef = useRef(null)
 
-  const canExport = role.level !== null && role.level !== undefined
+  const canExport = role.level === 'event_admin' || role.level === 'finance_head'
   const canImport = role.level === 'event_admin' || role.level === 'finance_head'
-
-  const canCreateProposal = role.level === 'event_admin' || role.level === 'finance_head' || role.level === 'dept_head'
 
   const load = async () => {
     setLoading(true)
     try {
-      const [props, depts] = await Promise.all([
+      const [pData, dData] = await Promise.all([
         budgetApi.listProposals(eventId),
-        departmentsApi.listDepartments(eventId),
+        departmentsApi.listDepartments(eventId).catch(() => []),
       ])
-      setProposals(props)
-      setDepartments(depts)
-      if (!selectedId && props.length > 0) setSelectedId(props[0].id)
+      const pList = Array.isArray(pData) ? pData : []
+      setProposals(pList)
+      setDepartments(Array.isArray(dData) ? dData : [])
+      if (pList.length > 0 && !selectedId) {
+        setSelectedId(pList[0].id)
+      }
     } catch {
-      setError("Couldn't load budget proposals")
+      setError("Couldn't load proposals")
     } finally {
       setLoading(false)
     }
@@ -236,51 +283,46 @@ function BudgetContent({ eventId }) {
 
   useEffect(() => {
     load()
-    setSelectedId(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
 
-  // A dept_head can only ever create proposals for their own department —
-  // lock the dropdown to it instead of leaving it open to pick any department.
+  const isScopedUser = (role.level === 'dept_head' || role.level === 'volunteer') && role.deptId
+  const deptLocked = isScopedUser
   useEffect(() => {
-    if (role.level === 'dept_head' && role.deptId) {
-      setForm((f) => ({ ...f, department_id: String(role.deptId) }))
-    }
-  }, [role.level, role.deptId])
+    if (isScopedUser) setForm((f) => ({ ...f, department_id: String(role.deptId) }))
+  }, [isScopedUser, role.deptId])
+
+  const canCreateProposal = role.level === 'event_admin' || role.level === 'finance_head' || role.level === 'dept_head'
 
   const handleCreate = async (e) => {
     e.preventDefault()
     try {
-      const created = await budgetApi.createProposal({
+      const res = await budgetApi.createProposal({
         event_id: Number(eventId),
         department_id: Number(form.department_id),
         title: form.title,
         notes: form.notes,
       })
-      setForm({ department_id: role.level === 'dept_head' ? String(role.deptId) : '', title: '', notes: '' })
+      setForm({ department_id: isScopedUser ? String(role.deptId) : '', title: '', notes: '' })
       setShowForm(false)
       await load()
-      setSelectedId(created.id)
+      setSelectedId(res.id)
       toast.success('Proposal created')
     } catch (err) {
       toast.error(getErrorMessage(err, "Couldn't create that proposal"))
     }
   }
 
-  const deptLocked = role.level === 'dept_head'
-
   const handleExport = async () => {
     setExporting(true)
     try {
-      const blob = await budgetApi.exportBudget(eventId)
-      const url = window.URL.createObjectURL(blob)
+      const blob = await budgetApi.exportBudgetExcel(eventId)
+      const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `budget_export_event_${eventId}.xlsx`
-      document.body.appendChild(a)
+      a.download = `budget-event-${eventId}.xlsx`
       a.click()
-      a.remove()
-      window.URL.revokeObjectURL(url)
+      URL.revokeObjectURL(url)
       toast.success('Budget exported')
     } catch (err) {
       toast.error(await getBlobErrorMessage(err, "Couldn't export the budget"))
@@ -305,30 +347,82 @@ function BudgetContent({ eventId }) {
       toast.error(getErrorMessage(err, "Couldn't import that file"))
     } finally {
       setImporting(false)
-      e.target.value = '' // allow re-selecting the same file name later
+      e.target.value = ''
     }
   }
 
-  const filteredProposals = proposals.filter((p) => {
-    if (!searchQuery.trim()) return true
-    const q = searchQuery.toLowerCase()
-    const matchLineItems = (p.line_items || []).some(
-      (li) => (li.item_name && li.item_name.toLowerCase().includes(q)) || (li.category && li.category.toLowerCase().includes(q))
-    )
-    return (
-      (p.title && p.title.toLowerCase().includes(q)) ||
-      (p.dept_name && p.dept_name.toLowerCase().includes(q)) ||
-      (p.notes && p.notes.toLowerCase().includes(q)) ||
-      (p.status && p.status.toLowerCase().includes(q)) ||
-      matchLineItems
-    )
+  const safeProposals = Array.isArray(proposals) ? proposals : []
+  const filteredProposals = safeProposals.filter((p) => {
+    if (!p) return false
+
+    // 1. Department Filter
+    if (deptFilter !== 'all') {
+      if (String(p.department_id) !== String(deptFilter)) return false
+    }
+
+    // 2. Status Filter
+    if (statusFilter !== 'all') {
+      if (p.status !== statusFilter) return false
+    }
+
+    // 3. Search Query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      const matchLineItems = (p.line_items || []).some(
+        (li) => (li.item_name && li.item_name.toLowerCase().includes(q)) || (li.category && li.category.toLowerCase().includes(q))
+      )
+      return (
+        (p.title && p.title.toLowerCase().includes(q)) ||
+        (p.dept_name && p.dept_name.toLowerCase().includes(q)) ||
+        (p.notes && p.notes.toLowerCase().includes(q)) ||
+        (p.status && p.status.toLowerCase().includes(q)) ||
+        matchLineItems
+      )
+    }
+    return true
   })
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div className="flex items-center gap-4 flex-wrap">
+      {/* Top Header & Filter Controls */}
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3 bg-card p-4 rounded-2xl border border-rule">
+        <div className="flex items-center gap-3 flex-wrap">
           <h2 className="font-display text-2xl font-semibold text-ink">Budget Proposals</h2>
+
+          {/* Department Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-ink/50 font-medium">🏢 Dept:</span>
+            <select
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              className="bg-well border border-rule rounded-lg px-2.5 py-1.5 text-xs text-ink font-semibold focus:outline-none focus:border-primary-500"
+            >
+              <option value="all">All Departments ({departments.length})</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-ink/50 font-medium">🚦 Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-well border border-rule rounded-lg px-2.5 py-1.5 text-xs text-ink font-semibold focus:outline-none focus:border-primary-500"
+            >
+              <option value="all">All Statuses</option>
+              <option value="draft">Draft</option>
+              <option value="submitted">Submitted (Pending)</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          {/* Search Box */}
           <div className="relative">
             <input
               type="text"
@@ -354,9 +448,9 @@ function BudgetContent({ eventId }) {
             <button
               onClick={handleExport}
               disabled={exporting}
-              className="text-sm border border-rule text-ink/75 px-3.5 py-2 rounded-full font-semibold hover:border-primary-400 hover:text-primary-500 transition-colors disabled:opacity-50"
+              className="text-xs border border-rule text-ink/75 px-3.5 py-1.5 rounded-full font-semibold hover:border-primary-400 hover:text-primary-500 transition-colors disabled:opacity-50"
             >
-              {exporting ? 'Exporting…' : '⬇ Export'}
+              {exporting ? 'Exporting…' : '⬇ Export Excel'}
             </button>
           )}
           {canImport && (
@@ -364,22 +458,19 @@ function BudgetContent({ eventId }) {
               <button
                 onClick={handleImportClick}
                 disabled={importing}
-                className="text-sm border border-rule text-ink/75 px-3.5 py-2 rounded-full font-semibold hover:border-primary-400 hover:text-primary-500 transition-colors disabled:opacity-50"
+                className="text-xs border border-rule text-ink/75 px-3.5 py-1.5 rounded-full font-semibold hover:border-primary-400 hover:text-primary-500 transition-colors disabled:opacity-50"
               >
                 {importing ? 'Importing…' : '⬆ Import'}
               </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx"
-                onChange={handleImportFile}
-                className="hidden"
-              />
+              <input ref={fileInputRef} type="file" accept=".xlsx" onChange={handleImportFile} className="hidden" />
             </>
           )}
           {canCreateProposal && (
-            <button onClick={() => setShowForm(!showForm)} className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all">
-              {showForm ? 'Cancel' : '+ New proposal'}
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-1.5 rounded-full shadow-xs active:scale-95 transition-all"
+            >
+              {showForm ? 'Cancel' : '+ New Proposal'}
             </button>
           )}
         </div>
@@ -411,20 +502,33 @@ function BudgetContent({ eventId }) {
       {canCreateProposal && showForm && (
         <form onSubmit={handleCreate} className="bg-card border border-rule rounded-xl p-5 mb-6 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input placeholder="Proposal title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="bg-well border border-rule rounded-lg px-3 py-2 text-sm" />
+            <input
+              placeholder="Proposal title"
+              required
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              className="bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink"
+            />
             <select
               required
               disabled={deptLocked}
               value={form.department_id}
               onChange={(e) => setForm({ ...form, department_id: e.target.value })}
-              className="bg-well border border-rule rounded-lg px-3 py-2 text-sm disabled:bg-well disabled:text-ink/50"
+              className="bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink disabled:opacity-50"
             >
               <option value="">Select department</option>
               {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
               ))}
             </select>
-            <input placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="bg-well border border-rule rounded-lg px-3 py-2 text-sm col-span-1 sm:col-span-2" />
+            <input
+              placeholder="Notes"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              className="bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink col-span-1 sm:col-span-2"
+            />
           </div>
           <button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all">
             Create proposal
@@ -441,9 +545,11 @@ function BudgetContent({ eventId }) {
         <div className="bg-card border border-dashed border-rule rounded-xl p-10 text-center">
           <p className="text-3xl mb-2">🔍</p>
           <p className="text-sm text-ink/60">
-            {searchQuery ? `No proposals matching "${searchQuery}"` : (canCreateProposal
+            {searchQuery || deptFilter !== 'all' || statusFilter !== 'all'
+              ? 'No budget proposals matching the selected filters.'
+              : canCreateProposal
               ? "No proposals on the books yet — start one above (you'll need a department first)."
-              : 'Nothing here for your department yet.')}
+              : 'Nothing here for your department yet.'}
           </p>
         </div>
       ) : (
