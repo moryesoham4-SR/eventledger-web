@@ -20,7 +20,7 @@ export default function SponsorInstallmentTracker({ sponsor, currency = 'INR', c
       setInstallments(Array.isArray(data) ? data : [])
     } catch {
       setInstallments([])
-    } fontally {
+    } finally {
       setLoading(false)
     }
   }
