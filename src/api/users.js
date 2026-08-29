@@ -3,7 +3,9 @@ import client from './client'
 export const getMyRole = (eventId) =>
   client.get('/api/users/my-role', { params: { event_id: eventId } }).then((r) => r.data)
 
-export const listUsers = () => client.get('/api/users/').then((r) => r.data)
+export const listUsers = (eventId) =>
+  client.get('/api/users/', { params: eventId ? { event_id: eventId } : {} }).then((r) => r.data)
+
 export const listUsersByEvent = (eventId) => client.get(`/api/users/event/${eventId}`).then((r) => r.data)
 export const getEventTeam = (eventId) => client.get(`/api/users/event-team/${eventId}`).then((r) => r.data)
 export const inviteMember = (data) => client.post('/api/users/invite-member', data).then((r) => r.data)
