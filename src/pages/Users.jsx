@@ -22,19 +22,22 @@ export default function Users() {
 
   const load = async () => {
     setLoading(true)
+    setError('')
     try {
-      const [u, log] = await Promise.all([usersApi.listUsers(activeEventId), usersApi.getAuditLog()])
-      setUsers(Array.isArray(u) ? u : [])
-      setAuditLog(Array.isArray(log) ? log : [])
+      const usersData = await usersApi.listUsers(activeEventId).catch(() => [])
+      setUsers(Array.isArray(usersData) ? usersData : [])
+
+      const auditData = await usersApi.getAuditLog().catch(() => [])
+      setAuditLog(Array.isArray(auditData) ? auditData : [])
 
       if (activeEventId) {
-        const depts = await departmentsApi.getDepartments(activeEventId)
-        setDepartments(Array.isArray(depts) ? depts : [])
+        const deptsData = await departmentsApi.getDepartments(activeEventId).catch(() => [])
+        setDepartments(Array.isArray(deptsData) ? deptsData : [])
       } else {
         setDepartments([])
       }
-    } catch {
-      setError('Failed to load users')
+    } catch (err) {
+      console.error(err)
     } finally {
       setLoading(false)
     }
