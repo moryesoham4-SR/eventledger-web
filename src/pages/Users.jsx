@@ -108,23 +108,27 @@ export default function Users() {
         )}
       </div>
 
-      <div className="flex bg-well rounded-xl p-1 mb-6 w-fit">
-        {['users', 'assign role', ...(currentUser?.is_super_admin ? ['reset password'] : []), 'audit log'].map((t) => (
+      <div className="flex border-b border-rule mb-6">
+        {['users', 'assign role', 'reset password', 'audit log'].map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-full text-sm font-semibold capitalize transition-all ${tab === t ? 'bg-card shadow-sm text-ink' : 'text-ink/55'}`}
+            className={`px-4 py-2 text-sm font-medium capitalize border-b-2 font-display ${
+              tab === t ? 'border-primary-600 text-ink font-semibold' : 'border-transparent text-ink/60 hover:text-ink'
+            }`}
           >
             {t}
           </button>
         ))}
       </div>
 
-      {error && <div className="mb-4 text-sm text-deficit-500 bg-deficit-50 rounded px-3 py-2">{error}</div>}
+      {error && <div className="text-sm text-deficit-600 bg-deficit-50 rounded-lg px-3 py-2.5 mb-4">{error}</div>}
 
       {loading ? (
-        <div className="space-y-2">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-14 rounded-xl" />)}
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="skeleton h-14 rounded-xl" />
+          ))}
         </div>
       ) : tab === 'users' ? (
         filteredUsers.length === 0 ? (
@@ -170,10 +174,11 @@ export default function Users() {
             ))}
           </select>
           <select value={roleForm.role} onChange={(e) => setRoleForm({ ...roleForm, role: e.target.value })} className="w-full bg-well border border-rule rounded px-3 py-2 text-sm">
-            <option value="volunteer">Volunteer</option>
+            <option value="volunteer">Volunteer / Co-Worker</option>
             <option value="dept_head">Department Head</option>
             <option value="finance_head">Finance Head</option>
-            <option value="event_admin">Event Admin</option>
+            <option value="event_admin">Event Admin (Manager)</option>
+            <option value="co_leader">Co-Leader / Co-Head (Full Authority)</option>
           </select>
           <button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all">Assign role</button>
         </form>
@@ -185,23 +190,29 @@ export default function Users() {
               <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
             ))}
           </select>
-          <input type="password" required placeholder="New password" value={pwForm.new_password} onChange={(e) => setPwForm({ ...pwForm, new_password: e.target.value })} className="w-full bg-well border border-rule rounded px-3 py-2 text-sm" />
+          <input
+            type="password"
+            placeholder="New password"
+            required
+            value={pwForm.new_password}
+            onChange={(e) => setPwForm({ ...pwForm, new_password: e.target.value })}
+            className="w-full bg-well border border-rule rounded px-3 py-2 text-sm text-ink"
+          />
           <button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all">Reset password</button>
         </form>
       ) : (
-        <div className="bg-card border border-rule rounded-xl divide-y divide-rule">
-          {auditLog.length === 0 ? (
-            <p className="text-ink/55 text-sm px-5 py-3">No audit log entries yet.</p>
-          ) : (
-            auditLog.map((entry) => (
-              <div key={entry.id} className="px-5 py-3">
-                <p className="text-sm text-ink">
-                  <span className="font-medium">{entry.user_name || 'System'}</span> — {entry.action || JSON.stringify(entry)}
-                </p>
-                <p className="text-xs text-ink/40">{entry.created_at}</p>
+        <div className="bg-card border border-rule rounded-xl p-5">
+          <div className="space-y-3">
+            {auditLog.map((item) => (
+              <div key={item.id} className="text-xs border-b border-rule pb-2 last:border-0">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-ink">{item.user_name || 'System'}</span>
+                  <span className="text-ink/40">{item.created_at}</span>
+                </div>
+                <p className="text-ink/70 mt-0.5">{item.action} — {item.details}</p>
               </div>
-            ))
-          )}
+            ))}
+          </div>
         </div>
       )}
     </div>
