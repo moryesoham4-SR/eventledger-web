@@ -42,7 +42,7 @@ export default function DepartmentTeamRosterModal({ dept, eventId, eventUsers = 
         user_id: Number(selectedUserId),
         role: selectedRole,
       })
-      toast.success(`Assigned as ${selectedRole === 'dept_head' ? 'Department Head 👑' : 'Co-Worker / Volunteer 🤝'}`)
+      toast.success(`Assigned as ${selectedRole === 'dept_head' ? 'Department Head 👑' : selectedRole === 'co_leader' ? 'Co-Leader 🌟' : selectedRole === 'event_admin' ? 'Event Admin 💼' : 'Co-Worker / Volunteer 🤝'}`)
       setSelectedUserId('')
       loadRoster()
       onUpdated?.()
@@ -168,6 +168,8 @@ export default function DepartmentTeamRosterModal({ dept, eventId, eventUsers = 
                   >
                     <option value="volunteer">🤝 Co-Worker</option>
                     <option value="dept_head">👑 Dept Head</option>
+                    <option value="event_admin">💼 Event Admin</option>
+                    <option value="co_leader">🌟 Co-Leader (Full Authority)</option>
                   </select>
                 </div>
                 <button type="submit" className="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold py-1.5 rounded-lg transition-all shadow-xs">
