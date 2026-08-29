@@ -17,6 +17,17 @@ export default function Users() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Add User Form State
+  const [addUserForm, setAddUserForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'volunteer',
+    dept_id: '',
+  })
+
+  // Assign Role Form State
   const [roleForm, setRoleForm] = useState({ user_id: '', role: 'volunteer', dept_id: '' })
   const [pwForm, setPwForm] = useState({ user_id: '', new_password: '' })
 
@@ -31,7 +42,7 @@ export default function Users() {
       setAuditLog(Array.isArray(auditData) ? auditData : [])
 
       if (activeEventId) {
-        const deptsData = await departmentsApi.getDepartments(activeEventId).catch(() => [])
+        const deptsData = await departmentsApi.listDepartments(Number(activeEventId)).catch(() => [])
         setDepartments(Array.isArray(deptsData) ? deptsData : [])
       } else {
         setDepartments([])
@@ -67,6 +78,30 @@ export default function Users() {
         <p className="text-ink/70">This section is available to Super Admins only.</p>
       </div>
     )
+  }
+
+  const handleAddUserSubmit = async (e) => {
+    e.preventDefault()
+    if (!activeEventId) {
+      toast.error('Please select an active event first')
+      return
+    }
+    try {
+      await usersApi.inviteMember({
+        event_id: Number(activeEventId),
+        name: addUserForm.name.trim(),
+        email: addUserForm.email.trim(),
+        password: addUserForm.password.trim(),
+        role: addUserForm.role,
+        dept_id: addUserForm.dept_id ? Number(addUserForm.dept_id) : null,
+      })
+      toast.success(`Created & assigned ${addUserForm.name || addUserForm.email}! ⚡`)
+      setAddUserForm({ name: '', email: '', password: '', role: 'volunteer', dept_id: '' })
+      setTab('users')
+      load()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to add user'))
+    }
   }
 
   const handleAssignRole = async (e) => {
@@ -137,15 +172,15 @@ export default function Users() {
       </div>
 
       <div className="flex border-b border-rule mb-6">
-        {['users', 'assign role', 'reset password', 'audit log'].map((t) => (
+        {['users', '+ Add User', 'assign role', 'reset password', 'audit log'].map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize border-b-2 font-display ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 font-display ${
               tab === t ? 'border-primary-600 text-ink font-semibold' : 'border-transparent text-ink/60 hover:text-ink'
             }`}
           >
-            {t}
+            {t === '+ Add User' ? '➕ Add User' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -212,6 +247,90 @@ export default function Users() {
             ))}
           </div>
         )
+      ) : tab === '+ Add User' ? (
+        <form onSubmit={handleAddUserSubmit} className="bg-card border border-rule rounded-xl p-6 space-y-4 max-w-lg shadow-sm">
+          <div>
+            <h3 className="font-display text-base font-bold text-ink">➕ Create & Invite New Team User</h3>
+            <p className="text-xs text-ink/55 mt-0.5">Add a new user to your event, set their role, and assign their department.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-ink/70">Full Name</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Rahul Sharma"
+                value={addUserForm.name}
+                onChange={(e) => setAddUserForm({ ...addUserForm, name: e.target.value })}
+                className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink font-medium"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-ink/70">Email Address</label>
+              <input
+                type="email"
+                required
+                placeholder="e.g. rahul@example.com"
+                value={addUserForm.email}
+                onChange={(e) => setAddUserForm({ ...addUserForm, email: e.target.value })}
+                className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink font-medium"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-ink/70">Initial Password (Optional)</label>
+            <input
+              type="text"
+              placeholder="Leave blank for auto-generated password"
+              value={addUserForm.password}
+              onChange={(e) => setAddUserForm({ ...addUserForm, password: e.target.value })}
+              className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm text-ink font-medium"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-ink/70">Role</label>
+              <select
+                value={addUserForm.role}
+                onChange={(e) => setAddUserForm({ ...addUserForm, role: e.target.value })}
+                className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm font-semibold"
+              >
+                <option value="volunteer">🤝 Volunteer / Co-Worker</option>
+                <option value="dept_head">👑 Department Head</option>
+                <option value="finance_head">👔 Finance Head</option>
+                <option value="event_admin">💼 Event Admin (Manager)</option>
+                <option value="co_leader">🌟 Co-Leader / Co-Head (Full Authority)</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-ink/70">Assign Department</label>
+              <select
+                value={addUserForm.dept_id}
+                onChange={(e) => setAddUserForm({ ...addUserForm, dept_id: e.target.value })}
+                className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-sm font-medium"
+              >
+                <option value="">-- No Department (General) --</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    🏢 {d.name} {d.head_name ? `(Head: ${d.head_name})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold py-2.5 rounded-xl transition-all shadow-xs"
+          >
+            Create & Add User ⚡
+          </button>
+        </form>
       ) : tab === 'assign role' ? (
         <form onSubmit={handleAssignRole} className="bg-card border border-rule rounded-xl p-5 space-y-4 max-w-md">
           <p className="text-xs text-ink/55 -mt-1 mb-2">
