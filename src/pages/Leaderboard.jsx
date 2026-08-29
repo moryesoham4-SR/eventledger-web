@@ -4,12 +4,15 @@ import * as leaderboardApi from '../api/leaderboard'
 import CertificateModal from '../components/CertificateModal'
 import { useAuth } from '../context/AuthContext'
 import { useMyRole } from '../hooks/useMyRole'
+import { useToast } from '../context/ToastContext'
 
 function LeaderboardContent({ eventId }) {
+  const toast = useToast()
   const { user } = useAuth()
   const role = useMyRole(eventId)
-  const [data, setData] = useState({ departments: [], volunteers: [] })
+  const [data, setData] = useState({ departments: [], volunteers: [], certificates_enabled: false })
   const [loading, setLoading] = useState(true)
+  const [togglingCert, setTogglingCert] = useState(false)
 
   // Certificate Modal State
   const [certModalData, setCertModalData] = useState(null)
@@ -19,9 +22,9 @@ function LeaderboardContent({ eventId }) {
     setLoading(true)
     try {
       const res = await leaderboardApi.getLeaderboard(eventId)
-      setData(res || { departments: [], volunteers: [] })
+      setData(res || { departments: [], volunteers: [], certificates_enabled: false })
     } catch {
-      setData({ departments: [], volunteers: [] })
+      setData({ departments: [], volunteers: [], certificates_enabled: false })
     } finally {
       setLoading(false)
     }
@@ -31,7 +34,30 @@ function LeaderboardContent({ eventId }) {
     loadData()
   }, [eventId])
 
+  const isEventAdmin = role.level === 'event_admin' || role.level === 'co_leader' || Boolean(user?.is_super_admin)
+  const isCertsUnlocked = Boolean(data.certificates_enabled)
+
+  const handleToggleCertificates = async () => {
+    if (!isEventAdmin) return
+    setTogglingCert(true)
+    const nextState = !isCertsUnlocked
+    try {
+      await leaderboardApi.toggleCertificates(Number(eventId), nextState)
+      toast.success(nextState ? '🔓 Certificate generation & downloads UNLOCKED for team!' : '🔒 Certificate generation LOCKED by Event Lead.')
+      loadData()
+    } catch {
+      toast.error('Failed to update certificate switch')
+    } finally {
+      setTogglingCert(false)
+    }
+  }
+
   const handleGenerateCertificate = async (vol) => {
+    if (!isEventAdmin && !isCertsUnlocked) {
+      toast.error('🔒 Certificate downloads are currently locked by the Event Director.')
+      return
+    }
+
     const recipientName = vol.name || vol.email || 'Team Member'
     const roleTitle = vol.role ? vol.role.replace('_', ' ').toUpperCase() : 'Co-Worker'
     const deptTitle = vol.dept_name || 'Event Operations'
@@ -72,8 +98,6 @@ function LeaderboardContent({ eventId }) {
   const safeDepts = Array.isArray(data.departments) ? data.departments : []
   const safeVolunteers = Array.isArray(data.volunteers) ? data.volunteers : []
   const topThree = safeDepts.slice(0, 3)
-
-  const isEventAdmin = role.level === 'event_admin' || role.level === 'co_host' || Boolean(user?.is_super_admin)
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
@@ -199,6 +223,39 @@ function LeaderboardContent({ eventId }) {
             </>
           )}
 
+          {/* Master Certificate Download Control Banner */}
+          <div className="p-5 bg-gradient-to-r from-card to-well border border-rule rounded-2xl flex items-center justify-between gap-4 flex-wrap shadow-xs">
+            <div className="flex items-center gap-3">
+              <span className={`w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold border ${isCertsUnlocked ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                {isCertsUnlocked ? '🔓' : '🔒'}
+              </span>
+              <div>
+                <h4 className="font-display font-bold text-ink text-sm flex items-center gap-2">
+                  Certificate Downloads: {isCertsUnlocked ? <span className="text-emerald-400">UNLOCKED 🔓</span> : <span className="text-amber-400">LOCKED 🔒</span>}
+                </h4>
+                <p className="text-xs text-ink/55 mt-0.5">
+                  {isCertsUnlocked
+                    ? 'All co-workers and volunteers can now download their Certificate of Appreciation.'
+                    : 'Certificate downloads are locked. Team members cannot download certificates until unlocked by Event Lead.'}
+                </p>
+              </div>
+            </div>
+
+            {isEventAdmin && (
+              <button
+                onClick={handleToggleCertificates}
+                disabled={togglingCert}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm ${
+                  isCertsUnlocked
+                    ? 'bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500/40'
+                }`}
+              >
+                <span>{isCertsUnlocked ? '🔒 Lock Downloads' : '🔓 Unlock Downloads For Team'}</span>
+              </button>
+            )}
+          </div>
+
           {/* Volunteer Certificate Issuance Roster */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -216,7 +273,7 @@ function LeaderboardContent({ eventId }) {
                 {safeVolunteers.map((v) => {
                   const isSelf = String(user?.id) === String(v.id) || (user?.email && user.email === v.email)
                   const isDeptHeadOfMember = role.level === 'dept_head' && String(role.deptId) === String(v.dept_id)
-                  const canIssue = isEventAdmin || isDeptHeadOfMember || isSelf
+                  const canIssue = isEventAdmin || (isCertsUnlocked && (isDeptHeadOfMember || isSelf))
 
                   return (
                     <div key={v.id} className="p-4 bg-card border border-rule rounded-xl flex items-center justify-between gap-3 shadow-xs">
@@ -247,8 +304,8 @@ function LeaderboardContent({ eventId }) {
                           <span>📜</span> {isSelf ? 'My Certificate' : 'Certificate'}
                         </button>
                       ) : (
-                        <span className="text-[11px] text-ink/40 italic px-2 py-1 bg-well/30 rounded border border-rule">
-                          Issued by Admin
+                        <span className="text-[11px] text-amber-400/80 font-semibold italic px-2 py-1 bg-amber-500/10 rounded border border-amber-500/20 flex items-center gap-1">
+                          <span>🔒</span> Locked by Lead
                         </span>
                       )}
                     </div>
