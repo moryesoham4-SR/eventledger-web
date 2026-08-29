@@ -2,8 +2,12 @@ import { useEffect, useState } from 'react'
 import RequireActiveEvent from '../components/RequireActiveEvent'
 import * as leaderboardApi from '../api/leaderboard'
 import CertificateModal from '../components/CertificateModal'
+import { useAuth } from '../context/AuthContext'
+import { useMyRole } from '../hooks/useMyRole'
 
 function LeaderboardContent({ eventId }) {
+  const { user } = useAuth()
+  const role = useMyRole(eventId)
   const [data, setData] = useState({ departments: [], volunteers: [] })
   const [loading, setLoading] = useState(true)
 
@@ -61,7 +65,6 @@ function LeaderboardContent({ eventId }) {
       })
       setCertModalData(payload || fallbackPayload)
     } catch {
-      // Guaranteed instant client-side fallback
       setCertModalData(fallbackPayload)
     }
   }
@@ -69,6 +72,8 @@ function LeaderboardContent({ eventId }) {
   const safeDepts = Array.isArray(data.departments) ? data.departments : []
   const safeVolunteers = Array.isArray(data.volunteers) ? data.volunteers : []
   const topThree = safeDepts.slice(0, 3)
+
+  const isEventAdmin = role.level === 'event_admin' || role.level === 'co_host' || Boolean(user?.is_super_admin)
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
@@ -208,28 +213,47 @@ function LeaderboardContent({ eventId }) {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {safeVolunteers.map((v) => (
-                  <div key={v.id} className="p-4 bg-card border border-rule rounded-xl flex items-center justify-between gap-3 shadow-xs">
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-well text-ink font-bold flex items-center justify-center text-xs border border-rule">
-                        {v.role === 'dept_head' ? '👑' : v.role === 'finance_head' ? '👔' : '🤝'}
-                      </span>
-                      <div>
-                        <h4 className="font-bold text-ink text-sm">{v.name || v.email}</h4>
-                        <p className="text-[11px] text-ink/50 capitalize">
-                          {v.role ? v.role.replace('_', ' ') : 'Team Member'} · {v.dept_name || 'Event Operations'}
-                        </p>
-                      </div>
-                    </div>
+                {safeVolunteers.map((v) => {
+                  const isSelf = String(user?.id) === String(v.id) || (user?.email && user.email === v.email)
+                  const isDeptHeadOfMember = role.level === 'dept_head' && String(role.deptId) === String(v.dept_id)
+                  const canIssue = isEventAdmin || isDeptHeadOfMember || isSelf
 
-                    <button
-                      onClick={() => handleGenerateCertificate(v)}
-                      className="bg-primary-600/15 hover:bg-primary-600 text-primary-400 hover:text-white border border-primary-500/30 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-xs"
-                    >
-                      <span>📜</span> Certificate
-                    </button>
-                  </div>
-                ))}
+                  return (
+                    <div key={v.id} className="p-4 bg-card border border-rule rounded-xl flex items-center justify-between gap-3 shadow-xs">
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full bg-well text-ink font-bold flex items-center justify-center text-xs border border-rule">
+                          {v.role === 'dept_head' ? '👑' : v.role === 'finance_head' ? '👔' : '🤝'}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="font-bold text-ink text-sm">{v.name || v.email}</h4>
+                            {isSelf && (
+                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.2 bg-primary-500/20 text-primary-400 rounded">
+                                You
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-ink/50 capitalize">
+                            {v.role ? v.role.replace('_', ' ') : 'Team Member'} · {v.dept_name || 'Event Operations'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {canIssue ? (
+                        <button
+                          onClick={() => handleGenerateCertificate(v)}
+                          className="bg-primary-600/15 hover:bg-primary-600 text-primary-400 hover:text-white border border-primary-500/30 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-xs"
+                        >
+                          <span>📜</span> {isSelf ? 'My Certificate' : 'Certificate'}
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-ink/40 italic px-2 py-1 bg-well/30 rounded border border-rule">
+                          Issued by Admin
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
