@@ -11,6 +11,7 @@ export const getEventTeam = (eventId) => client.get(`/api/users/event-team/${eve
 export const inviteMember = (data) => client.post('/api/users/invite-member', data).then((r) => r.data)
 export const assignRole = (data) => client.post('/api/users/assign-role', data).then((r) => r.data)
 export const resetPassword = (data) => client.post('/api/users/reset-password', data).then((r) => r.data)
+export const deleteUser = (userId) => client.delete(`/api/users/${userId}`).then((r) => r.data)
 export const getAuditLog = () => client.get('/api/users/audit-log').then((r) => r.data)
 
 export const getMyProfile = () => client.get('/api/users/me').then((r) => r.data)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import * as usersApi from '../api/users'
+import * as departmentsApi from '../api/departments'
 import { useAuth } from '../context/AuthContext'
 import { useActiveEvent } from '../context/EventContext'
 import { getErrorMessage } from '../api/client'
@@ -11,6 +12,7 @@ export default function Users() {
   const { activeEventId } = useActiveEvent()
   const [tab, setTab] = useState('users')
   const [users, setUsers] = useState([])
+  const [departments, setDepartments] = useState([])
   const [auditLog, setAuditLog] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -24,6 +26,13 @@ export default function Users() {
       const [u, log] = await Promise.all([usersApi.listUsers(activeEventId), usersApi.getAuditLog()])
       setUsers(Array.isArray(u) ? u : [])
       setAuditLog(Array.isArray(log) ? log : [])
+
+      if (activeEventId) {
+        const depts = await departmentsApi.getDepartments(activeEventId)
+        setDepartments(Array.isArray(depts) ? depts : [])
+      } else {
+        setDepartments([])
+      }
     } catch {
       setError('Failed to load users')
     } finally {
@@ -44,6 +53,7 @@ export default function Users() {
       (u.name && u.name.toLowerCase().includes(q)) ||
       (u.email && u.email.toLowerCase().includes(q)) ||
       (u.role && u.role.toLowerCase().includes(q)) ||
+      (u.dept_name && u.dept_name.toLowerCase().includes(q)) ||
       (u.org_name && u.org_name.toLowerCase().includes(q))
     )
   })
@@ -65,7 +75,7 @@ export default function Users() {
         role: roleForm.role,
         dept_id: roleForm.dept_id ? Number(roleForm.dept_id) : null,
       })
-      toast.success('Role updated & assigned! ⚡')
+      toast.success('Role & Department assignment updated! ⚡')
       setRoleForm({ user_id: '', role: 'volunteer', dept_id: '' })
       load()
     } catch (err) {
@@ -81,6 +91,19 @@ export default function Users() {
       setPwForm({ user_id: '', new_password: '' })
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to reset password'))
+    }
+  }
+
+  const handleDeleteUser = async (u) => {
+    if (!window.confirm(`Are you sure you want to delete user "${u.name || u.email}"? This action cannot be undone.`)) {
+      return
+    }
+    try {
+      await usersApi.deleteUser(u.id)
+      toast.success(`User "${u.name || u.email}" deleted successfully`)
+      load()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to delete user'))
     }
   }
 
@@ -143,53 +166,126 @@ export default function Users() {
         ) : (
           <div className="bg-card border border-rule rounded-xl divide-y divide-rule">
             {filteredUsers.map((u) => (
-            <div key={u.id} className="flex items-center justify-between px-5 py-3">
-              <div className="flex items-center gap-3">
-                <span
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
-                  style={{ backgroundColor: u.avatar_color || '#6366f1' }}
-                >
-                  {u.name?.[0]?.toUpperCase() || '?'}
-                </span>
-                <div>
-                  <p className="text-sm font-medium text-ink">{u.name}</p>
-                  <p className="text-xs text-ink/55">{u.email}</p>
+              <div key={u.id} className="flex items-center justify-between px-5 py-3 gap-3">
+                <div className="flex items-center gap-3">
+                  <span
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
+                    style={{ backgroundColor: u.avatar_color || '#6366f1' }}
+                  >
+                    {u.name?.[0]?.toUpperCase() || '?'}
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-ink">{u.name}</p>
+                      {u.dept_name && (
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 bg-primary-600/15 text-primary-400 border border-primary-500/30 rounded-full">
+                          🏢 {u.dept_name}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-ink/55">{u.email}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-ink/80 capitalize">
+                      {u.role ? u.role.replace('_', ' ') : 'Member'}{u.is_super_admin ? ' · Super Admin' : ''}
+                    </p>
+                    <p className="text-xs text-ink/40">{u.org_name}</p>
+                  </div>
+
+                  {currentUser.id !== u.id && (
+                    <button
+                      onClick={() => handleDeleteUser(u)}
+                      className="text-deficit-500 hover:text-deficit-600 hover:bg-deficit-500/10 p-1.5 rounded-lg transition-colors text-xs font-semibold flex items-center gap-1 border border-deficit-500/20"
+                      title="Delete User"
+                    >
+                      <span>🗑️</span> Delete
+                    </button>
+                  )}
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-xs font-semibold text-ink/80 capitalize">{u.role ? u.role.replace('_', ' ') : 'Member'}{u.is_super_admin ? ' · Super Admin' : ''}</p>
-                <p className="text-xs text-ink/40">{u.org_name}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
         )
       ) : tab === 'assign role' ? (
-        <form onSubmit={handleAssignRole} className="bg-card border border-rule rounded-xl p-5 space-y-3 max-w-md">
+        <form onSubmit={handleAssignRole} className="bg-card border border-rule rounded-xl p-5 space-y-4 max-w-md">
           <p className="text-xs text-ink/55 -mt-1 mb-2">
             {activeEventId ? 'Applies to your active event.' : 'No active event selected — role will be global.'}
           </p>
-          <select required value={roleForm.user_id} onChange={(e) => setRoleForm({ ...roleForm, user_id: e.target.value })} className="w-full bg-well border border-rule rounded px-3 py-2 text-sm font-medium">
-            <option value="">Select user...</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
-            ))}
-          </select>
-          <select value={roleForm.role} onChange={(e) => setRoleForm({ ...roleForm, role: e.target.value })} className="w-full bg-well border border-rule rounded px-3 py-2 text-sm font-semibold">
-            <option value="volunteer">🤝 Volunteer / Co-Worker</option>
-            <option value="dept_head">👑 Department Head</option>
-            <option value="finance_head">👔 Finance Head</option>
-            <option value="event_admin">💼 Event Admin (Manager)</option>
-            <option value="co_leader">🌟 Co-Leader / Co-Head (Full Authority)</option>
-          </select>
-          <button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all shadow-xs">Assign & Update Role</button>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-ink/70">1. Select User</label>
+            <select
+              required
+              value={roleForm.user_id}
+              onChange={(e) => setRoleForm({ ...roleForm, user_id: e.target.value })}
+              className="w-full bg-well border border-rule rounded px-3 py-2 text-sm font-medium"
+            >
+              <option value="">Select user...</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.email}) {u.dept_name ? `[${u.dept_name}]` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-ink/70">2. Select Role</label>
+            <select
+              value={roleForm.role}
+              onChange={(e) => setRoleForm({ ...roleForm, role: e.target.value })}
+              className="w-full bg-well border border-rule rounded px-3 py-2 text-sm font-semibold"
+            >
+              <option value="volunteer">🤝 Volunteer / Co-Worker</option>
+              <option value="dept_head">👑 Department Head</option>
+              <option value="finance_head">👔 Finance Head</option>
+              <option value="event_admin">💼 Event Admin (Manager)</option>
+              <option value="co_leader">🌟 Co-Leader / Co-Head (Full Authority)</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-ink/70">3. Select Department (Transfer / Assign)</label>
+            <select
+              value={roleForm.dept_id}
+              onChange={(e) => setRoleForm({ ...roleForm, dept_id: e.target.value })}
+              className="w-full bg-well border border-rule rounded px-3 py-2 text-sm font-medium"
+            >
+              <option value="">-- No Specific Department (Event-wide) --</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  🏢 {d.name} {d.head_name ? `(Head: ${d.head_name})` : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-ink/50 italic">
+              Select Logistics, Art & Decor, Technical, etc. to transfer or assign user to that department.
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-xs"
+          >
+            Save Role & Department Assignment ⚡
+          </button>
         </form>
       ) : tab === 'reset password' ? (
         <form onSubmit={handleResetPassword} className="bg-card border border-rule rounded-xl p-5 space-y-3 max-w-md">
-          <select required value={pwForm.user_id} onChange={(e) => setPwForm({ ...pwForm, user_id: e.target.value })} className="w-full bg-well border border-rule rounded px-3 py-2 text-sm">
+          <select
+            required
+            value={pwForm.user_id}
+            onChange={(e) => setPwForm({ ...pwForm, user_id: e.target.value })}
+            className="w-full bg-well border border-rule rounded px-3 py-2 text-sm"
+          >
             <option value="">Select user</option>
             {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+              <option key={u.id} value={u.id}>
+                {u.name} ({u.email})
+              </option>
             ))}
           </select>
           <input
@@ -200,7 +296,12 @@ export default function Users() {
             onChange={(e) => setPwForm({ ...pwForm, new_password: e.target.value })}
             className="w-full bg-well border border-rule rounded px-3 py-2 text-sm text-ink"
           />
-          <button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all">Reset password</button>
+          <button
+            type="submit"
+            className="bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all"
+          >
+            Reset password
+          </button>
         </form>
       ) : (
         <div className="bg-card border border-rule rounded-xl p-5">
@@ -211,7 +312,9 @@ export default function Users() {
                   <span className="font-semibold text-ink">{item.user_name || 'System'}</span>
                   <span className="text-ink/40">{item.created_at}</span>
                 </div>
-                <p className="text-ink/70 mt-0.5">{item.action} — {item.details}</p>
+                <p className="text-ink/70 mt-0.5">
+                  {item.action} — {item.details}
+                </p>
               </div>
             ))}
           </div>
