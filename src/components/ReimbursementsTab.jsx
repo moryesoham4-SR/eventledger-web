@@ -64,7 +64,7 @@ export default function ReimbursementsTab({ eventId, role, currency = 'INR' }) {
       toast.success('Reimbursement claim submitted! Queued for Dept Head review.')
       setShowSubmitModal(false)
       setForm({ department_id: '', item_name: '', category: 'General', amount: '', receipt_url: '', notes: '' })
-      loadData()
+      loadData(true)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to submit claim'))
     } finally {
@@ -91,7 +91,7 @@ export default function ReimbursementsTab({ eventId, role, currency = 'INR' }) {
     try {
       await reimbursementsApi.deptHeadApproveClaim(claimId, { status, notes })
       toast.success(status === 'approved' ? 'Claim verified by Dept Head! Sent to Finance for final payout.' : 'Claim rejected')
-      loadData()
+      loadData(true)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to update claim verification'))
     }
@@ -109,7 +109,7 @@ export default function ReimbursementsTab({ eventId, role, currency = 'INR' }) {
       })
       toast.success(`Claim for ₹${payoutClaim.amount} APPROVED & PAID OUT! Synced to Actual Expenses 💰`)
       setPayoutClaim(null)
-      loadData()
+      loadData(true)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to process finance payout'))
     }
@@ -120,7 +120,7 @@ export default function ReimbursementsTab({ eventId, role, currency = 'INR' }) {
     try {
       await reimbursementsApi.deleteReimbursement(claimId)
       toast.success('Claim deleted')
-      loadData()
+      loadData(true)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete claim'))
     }
