@@ -12,6 +12,8 @@ export const deleteLineItem = (id) => client.delete(`/api/budget/line-items/${id
 export const exportBudget = (eventId) =>
   client.get('/api/budget/export', { params: { event_id: eventId }, responseType: 'blob' }).then((r) => r.data)
 
+export const exportBudgetExcel = exportBudget
+
 export const importBudget = (eventId, file) => {
   const formData = new FormData()
   formData.append('event_id', eventId)
