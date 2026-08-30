@@ -280,7 +280,7 @@ function BudgetContent({ eventId }) {
       }
     } catch {
       setError("Couldn't load proposals")
-    } font-finally {
+    } finally {
       setLoading(false)
     }
   }
