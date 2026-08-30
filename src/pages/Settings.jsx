@@ -8,13 +8,143 @@ import { getErrorMessage } from '../api/client'
 import * as usersApi from '../api/users'
 import * as integrationsApi from '../api/integrations'
 
+const DEFAULT_APPS_SCRIPT = `/**
+ * EventLedger AI — Google Sheets Live Auto-Sync Webhook Script
+ * 
+ * Instructions:
+ * 1. Open your Google Sheet.
+ * 2. Click Extensions -> Apps Script.
+ * 3. Delete any existing code and paste this entire code script.
+ * 4. Click 'Deploy' -> 'New deployment'.
+ * 5. Select type: 'Web app' (Execute as: 'Me', Who has access: 'Anyone').
+ * 6. Click 'Deploy', authorize access, and copy the Web App URL!
+ * 7. Paste the Web App URL into EventLedger Settings -> Google Sheets Integration.
+ */
+
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    if (data.action === "sync_all") {
+      syncFullEventLedger(ss, data);
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Full EventLedger synced successfully!" })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    appendSingleRecord(ss, data);
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Record updated" })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function syncFullEventLedger(ss, payload) {
+  var summarySheet = getOrCreateSheet(ss, "📊 Financial Summary");
+  summarySheet.clear();
+  summarySheet.appendRow(["Event Name", payload.event_name || "EventLedger AI"]);
+  summarySheet.appendRow(["Last Synced", new Date().toLocaleString()]);
+  summarySheet.appendRow([]);
+  summarySheet.appendRow(["Metric", "Estimated Amount (₹)", "Actual Amount (₹)", "Variance (Over/Under ₹)"]);
+  
+  var estBudget = payload.summary ? payload.summary.total_estimated_budget : 0;
+  var actExpense = payload.summary ? payload.summary.total_actual_expenses : 0;
+  var estIncome = payload.summary ? payload.summary.total_estimated_income : 0;
+  var actIncome = payload.summary ? payload.summary.total_actual_income : 0;
+  
+  summarySheet.appendRow(["Total Budget / Expenses", estBudget, actExpense, estBudget - actExpense]);
+  summarySheet.appendRow(["Total Income / Revenue", estIncome, actIncome, actIncome - estIncome]);
+  summarySheet.appendRow(["Net Financial Margin", estIncome - estBudget, actIncome - actExpense, (actIncome - actExpense) - (estIncome - estBudget)]);
+  formatHeaderRow(summarySheet, 4);
+
+  var incomeSheet = getOrCreateSheet(ss, "💰 Income (Est vs Actual)");
+  incomeSheet.clear();
+  incomeSheet.appendRow(["ID", "Title / Source", "Category", "Target Estimated (₹)", "Actual Received (₹)", "Variance (₹)", "Payment Method", "Status", "Date"]);
+  if (payload.income && payload.income.length > 0) {
+    payload.income.forEach(function(row) {
+      var est = Number(row.target_amount || row.amount || 0);
+      var act = Number(row.actual_amount || row.amount || 0);
+      incomeSheet.appendRow([row.id, row.title || row.source, row.category || "General", est, act, act - est, row.payment_method || "N/A", row.status || "Received", row.date || ""]);
+    });
+  }
+  formatHeaderRow(incomeSheet, 1);
+
+  var expenseSheet = getOrCreateSheet(ss, "💸 Expenses (Est vs Actual)");
+  expenseSheet.clear();
+  expenseSheet.appendRow(["ID", "Title / Item", "Department", "Estimated Budget (₹)", "Actual Spent (₹)", "Variance (₹)", "Receipt URL", "Payment Method", "Date"]);
+  if (payload.expenses && payload.expenses.length > 0) {
+    payload.expenses.forEach(function(row) {
+      var est = Number(row.estimated_cost || row.amount || 0);
+      var act = Number(row.amount || 0);
+      expenseSheet.appendRow([row.id, row.title, row.dept_name || "General", est, act, est - act, row.receipt_url || "", row.payment_method || "N/A", row.date || ""]);
+    });
+  }
+  formatHeaderRow(expenseSheet, 1);
+
+  var budgetSheet = getOrCreateSheet(ss, "📑 Department Proposals");
+  budgetSheet.clear();
+  budgetSheet.appendRow(["ID", "Department", "Proposal Title", "Requested Total (₹)", "Status", "Description"]);
+  if (payload.proposals && payload.proposals.length > 0) {
+    payload.proposals.forEach(function(row) {
+      budgetSheet.appendRow([row.id, row.dept_name || "General", row.title, row.total_amount || 0, row.status || "Pending", row.description || ""]);
+    });
+  }
+  formatHeaderRow(budgetSheet, 1);
+
+  var sponsorSheet = getOrCreateSheet(ss, "🤝 Sponsors");
+  sponsorSheet.clear();
+  sponsorSheet.appendRow(["ID", "Sponsor Company", "Tier", "Committed Amount (₹)", "Received Amount (₹)", "Contact Person", "Status"]);
+  if (payload.sponsors && payload.sponsors.length > 0) {
+    payload.sponsors.forEach(function(row) {
+      sponsorSheet.appendRow([row.id, row.name || row.company, row.tier || "General", row.committed_amount || 0, row.received_amount || 0, row.contact_name || "", row.status || "Pledged"]);
+    });
+  }
+  formatHeaderRow(sponsorSheet, 1);
+
+  var vendorSheet = getOrCreateSheet(ss, "🏢 Vendors & Quotes");
+  vendorSheet.clear();
+  vendorSheet.appendRow(["ID", "Vendor Name", "Category", "Quoted Price (₹)", "Final Paid (₹)", "Contact Phone", "Status"]);
+  if (payload.vendors && payload.vendors.length > 0) {
+    payload.vendors.forEach(function(row) {
+      vendorSheet.appendRow([row.id, row.name, row.category || "Service", row.quoted_price || 0, row.paid_amount || 0, row.phone || "", row.status || "Active"]);
+    });
+  }
+  formatHeaderRow(vendorSheet, 1);
+}
+
+function appendSingleRecord(ss, payload) {
+  var sheetName = "📊 Financial Summary";
+  if (payload.entity === "income") sheetName = "💰 Income (Est vs Actual)";
+  if (payload.entity === "expense") sheetName = "💸 Expenses (Est vs Actual)";
+  if (payload.entity === "sponsor") sheetName = "🤝 Sponsors";
+  if (payload.entity === "vendor") sheetName = "🏢 Vendors & Quotes";
+  if (payload.entity === "proposal") sheetName = "📑 Department Proposals";
+  
+  var sheet = getOrCreateSheet(ss, sheetName);
+  var rec = payload.data || {};
+  sheet.appendRow([rec.id || "NEW", rec.title || rec.name || "Record", JSON.stringify(rec), new Date().toLocaleString()]);
+}
+
+function getOrCreateSheet(ss, name) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) sheet = ss.insertSheet(name);
+  return sheet;
+}
+
+function formatHeaderRow(sheet, rowNum) {
+  try {
+    var range = sheet.getRange(rowNum, 1, 1, sheet.getLastColumn());
+    range.setBackground("#1e293b").setFontColor("#ffffff").setFontWeight("bold");
+  } catch (err) {}
+}`
+
 function GoogleSheetsIntegrationSection({ activeEventId }) {
   const toast = useToast()
   const [webhookUrl, setWebhookUrl] = useState('')
   const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(true)
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
-  const [scriptTemplate, setScriptTemplate] = useState('')
-  const [showScriptModal, setShowScriptModal] = useState(false)
+  const [scriptTemplate, setScriptTemplate] = useState(DEFAULT_APPS_SCRIPT)
+  const [showScriptDrawer, setShowScriptDrawer] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
 
@@ -26,14 +156,13 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
           setWebhookUrl(cfg.webhook_url || '')
           setIsAutoSyncEnabled(Boolean(cfg.is_auto_sync_enabled))
           setLastSyncedAt(cfg.last_synced_at)
-          setScriptTemplate(cfg.script_template || '')
+          if (cfg.script_template) setScriptTemplate(cfg.script_template)
         })
         .catch(() => {})
     }
   }, [activeEventId])
 
   const isSheetUrl = webhookUrl.includes('docs.google.com/spreadsheets')
-  const isValidWebhook = webhookUrl.includes('script.google.com/macros/s')
 
   const handleSaveConfig = async (e) => {
     e.preventDefault()
@@ -61,7 +190,7 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
     if (!activeEventId) return
     if (isSheetUrl) {
       toast.error('Please deploy the Apps Script and use the script.google.com Web App URL!')
-      setShowScriptModal(true)
+      setShowScriptDrawer(true)
       return
     }
     setSyncing(true)
@@ -77,12 +206,18 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
   }
 
   const handleCopyScript = () => {
-    navigator.clipboard.writeText(scriptTemplate)
-    toast.success('Google Apps Script copied to clipboard! 📋')
+    try {
+      navigator.clipboard.writeText(scriptTemplate)
+      setCopied(true)
+      toast.success('Google Apps Script copied to clipboard! 📋')
+      setTimeout(() => setCopied(false), 3000)
+    } catch (err) {
+      toast.error('Could not copy automatically. Please select and copy manually.')
+    }
   }
 
   return (
-    <div className="lift bg-card border border-rule rounded-xl p-5 mb-6">
+    <div className="lift bg-card border border-rule rounded-xl p-5 mb-6 text-left">
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <span className="text-xl">📊</span>
@@ -122,7 +257,7 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
                   </p>
                   <button
                     type="button"
-                    onClick={() => setShowScriptModal(true)}
+                    onClick={() => setShowScriptDrawer(true)}
                     className="inline-block mt-1 font-bold text-xs text-amber-300 underline hover:text-white"
                   >
                     👉 Click here for 1-Click Code & Setup Steps
@@ -146,12 +281,44 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
 
           <button
             type="button"
-            onClick={() => setShowScriptModal(true)}
-            className="text-xs font-bold text-primary-400 hover:text-primary-300 underline"
+            onClick={() => setShowScriptDrawer(!showScriptDrawer)}
+            className="text-xs font-bold text-primary-400 hover:text-primary-300 underline flex items-center gap-1"
           >
-            📋 1-Click Apps Script Code
+            <span>{showScriptDrawer ? '📖 Hide Setup Guide' : '📋 1-Click Apps Script Code'}</span>
           </button>
         </div>
+
+        {/* Stable Inline Setup Guide Drawer */}
+        {showScriptDrawer && (
+          <div className="mt-3 p-4 bg-well/70 border border-rule rounded-xl space-y-3 animate-fade-in text-left">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-primary-400">
+                Setup Instructions (2 Minutes)
+              </h4>
+              <button
+                type="button"
+                onClick={handleCopyScript}
+                className="bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-full shadow-xs transition-all active:scale-95 flex items-center gap-1.5"
+              >
+                <span>{copied ? '✓ Copied!' : '📋 Copy Script Code'}</span>
+              </button>
+            </div>
+
+            <ol className="text-xs text-ink/80 space-y-1.5 list-decimal list-inside leading-relaxed bg-card/60 p-3 rounded-lg border border-rule">
+              <li>Open your Google Sheet ➔ Click <strong>Extensions</strong> ➔ <strong>Apps Script</strong>.</li>
+              <li>Delete any existing code and paste this copied script.</li>
+              <li>Click <strong>Deploy</strong> ➔ <strong>New deployment</strong> ➔ Select type: <strong>Web app</strong>.</li>
+              <li>Set <strong>Execute as</strong>: <code className="bg-well px-1 rounded text-emerald-400">Me</code>, <strong>Who has access</strong>: <code className="bg-well px-1 rounded text-emerald-400">Anyone</code>.</li>
+              <li>Click <strong>Deploy</strong>, copy the generated Web App URL and paste it above!</li>
+            </ol>
+
+            <div className="relative">
+              <pre className="p-3 bg-[#080C14] text-emerald-400 font-mono text-[11px] rounded-lg max-h-48 overflow-y-auto border border-rule select-all">
+                {scriptTemplate}
+              </pre>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-rule">
           <div className="text-[11px] text-ink/50">
@@ -165,7 +332,7 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
           <div className="flex items-center gap-2">
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || isSheetUrl}
               className="bg-card border border-rule hover:bg-well text-ink text-xs font-semibold px-4 py-2 rounded-full transition-all disabled:opacity-50"
             >
               {saving ? 'Saving...' : 'Save Webhook URL'}
@@ -174,7 +341,7 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
             <button
               type="button"
               onClick={handleSyncAll}
-              disabled={syncing || !webhookUrl}
+              disabled={syncing || !webhookUrl || isSheetUrl}
               className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-full shadow-xs transition-all disabled:opacity-40 flex items-center gap-1.5"
             >
               <span>⚡</span>
@@ -183,46 +350,6 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
           </div>
         </div>
       </form>
-
-      {/* Script Modal */}
-      {showScriptModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-card border border-rule rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 animate-fade-in text-left">
-            <div className="flex items-center justify-between border-b border-rule pb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">📋</span>
-                <h3 className="font-display text-lg font-bold text-ink">Google Apps Script Live Sync Template</h3>
-              </div>
-              <button onClick={() => setShowScriptModal(false)} className="text-ink/40 hover:text-ink text-sm">✕</button>
-            </div>
-
-            <ol className="text-xs text-ink/70 space-y-1 list-decimal list-inside bg-well/50 p-3 rounded-xl border border-rule">
-              <li>Open your Google Sheet ➔ Click <strong>Extensions</strong> ➔ <strong>Apps Script</strong>.</li>
-              <li>Paste this script code and click <strong>Deploy</strong> ➔ <strong>New deployment</strong>.</li>
-              <li>Select <strong>Web app</strong> (Execute as: <strong>Me</strong>, Access: <strong>Anyone</strong>).</li>
-              <li>Copy the generated Web App URL and paste it into EventLedger Settings!</li>
-            </ol>
-
-            <div className="relative">
-              <pre className="p-4 bg-[#090D16] text-emerald-300 font-mono text-[11px] rounded-xl overflow-x-auto max-h-60 border border-rule">
-                {scriptTemplate}
-              </pre>
-            </div>
-
-            <div className="flex justify-between items-center pt-2">
-              <button
-                onClick={handleCopyScript}
-                className="bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs px-5 py-2 rounded-full shadow-xs"
-              >
-                📋 Copy Code Script
-              </button>
-              <button onClick={() => setShowScriptModal(false)} className="text-xs text-ink/60 hover:text-ink">
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
