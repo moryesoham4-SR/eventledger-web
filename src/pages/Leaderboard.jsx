@@ -14,9 +14,8 @@ function LeaderboardContent({ eventId }) {
 
   const [leaderboardData, setLeaderboardData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [certModalUser, setCertModalUser] = useState(null)
-  const [activeTab, setActiveTab] = useState('departments') // 'departments' | 'volunteers'
   const [togglingCert, setTogglingCert] = useState(false)
+  const [certModalData, setCertModalData] = useState(null)
 
   const loadLeaderboard = async () => {
     if (!eventId) return
@@ -26,7 +25,7 @@ function LeaderboardContent({ eventId }) {
       setLeaderboardData(data)
     } catch {
       toast.error('Failed to load leaderboard scores.')
-    } font-finally {
+    } finally {
       setLoading(false)
     }
   }
@@ -63,7 +62,22 @@ function LeaderboardContent({ eventId }) {
       toast.error('🔒 Certificate downloads are currently locked by the Event Lead.')
       return
     }
-    setCertModalUser(volunteerUser)
+    const recipientName = volunteerUser.name || volunteerUser.email || 'Team Member'
+    const roleTitle = volunteerUser.role ? volunteerUser.role.replace('_', ' ').toUpperCase() : 'Co-Worker'
+    const deptTitle = volunteerUser.dept_name || 'Event Operations'
+
+    setCertModalData({
+      organization_name: 'Event Management Board',
+      event_title: 'Event Fest 2026',
+      award_title: 'Certificate of Appreciation',
+      recipient_name: recipientName,
+      recipient_role: roleTitle,
+      department_name: deptTitle,
+      citation: 'In recognition of outstanding dedication, leadership, and exemplary event management service.',
+      signatory_1: { title: 'Event Lead', name: 'Event Director' },
+      signatory_2: { title: 'Faculty Advisor', name: 'Dean of Student Affairs' },
+      certificate_id: `CERT-${eventId}-${volunteerUser.id || 99}-882`,
+    })
   }
 
   const safeDepts = Array.isArray(leaderboardData?.departments) ? leaderboardData.departments : []
