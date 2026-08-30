@@ -19,16 +19,16 @@ function ProposalPanel({ proposalId, onChanged, role }) {
   const [showItemForm, setShowItemForm] = useState(false)
   const [newItem, setNewItem] = useState({ category: '', item_name: '', description: '', quantity: 1, unit: 'unit', estimated_cost: '' })
 
-  const load = async () => {
-    setLoading(true)
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const data = await budgetApi.getProposal(proposalId)
       setProposal(data)
     } catch {
-      setError("Couldn't load this proposal")
+      if (!silent) setError("Couldn't load this proposal")
       toast.error("Couldn't load this proposal")
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -54,36 +54,87 @@ function ProposalPanel({ proposalId, onChanged, role }) {
     const cost = Number(newItem.estimated_cost) || 0
     const total = qty * cost
 
+    const tempItem = {
+      id: Date.now(),
+      category: newItem.category || 'General',
+      item_name: newItem.item_name,
+      description: newItem.description || '',
+      quantity: qty,
+      unit: newItem.unit || 'unit',
+      unit_price: cost,
+      estimated_cost: cost,
+      total_amount: total,
+      total_cost: total,
+    }
+
+    // INSTANT OPTIMISTIC UI UPDATE (0ms delay!)
+    setProposal((prev) => {
+      if (!prev) return prev
+      const updatedItems = [...(prev.line_items || []), tempItem]
+      const newTotal = updatedItems.reduce((sum, i) => sum + Number(i.total_amount ?? i.total_cost ?? 0), 0)
+      return {
+        ...prev,
+        line_items: updatedItems,
+        total_amount: newTotal,
+      }
+    })
+
+    setNewItem({ category: '', item_name: '', description: '', quantity: 1, unit: 'unit', estimated_cost: '' })
+    setShowItemForm(false)
+    toast.success('Line item added')
+
     try {
-      await budgetApi.addLineItem({
+      const createdItem = await budgetApi.addLineItem({
         proposal_id: proposalId,
-        category: newItem.category || 'General',
-        item_name: newItem.item_name,
-        description: newItem.description || '',
-        quantity: qty,
-        unit: newItem.unit || 'unit',
+        category: tempItem.category,
+        item_name: tempItem.item_name,
+        description: tempItem.description,
+        quantity: tempItem.quantity,
+        unit: tempItem.unit,
         unit_price: cost,
         estimated_cost: cost,
         total_amount: total,
       })
-      setNewItem({ category: '', item_name: '', description: '', quantity: 1, unit: 'unit', estimated_cost: '' })
-      setShowItemForm(false)
-      await load()
-      onChanged?.()
-      toast.success('Line item added')
+
+      // Replace temp item with real server item
+      setProposal((prev) => {
+        if (!prev) return prev
+        const items = (prev.line_items || []).map((i) => (i.id === tempItem.id ? createdItem : i))
+        const newTotal = items.reduce((sum, i) => sum + Number(i.total_amount ?? i.total_cost ?? 0), 0)
+        return {
+          ...prev,
+          line_items: items,
+          total_amount: newTotal,
+        }
+      })
+      onChanged?.(true)
     } catch (err) {
+      await load(true)
       toast.error(getErrorMessage(err, "Couldn't add that line item"))
     }
   }
 
   const handleRemoveItem = async (itemId) => {
     if (!(await confirm('Remove this line item?', { danger: true, confirmLabel: 'Remove' }))) return
+
+    // INSTANT LOCAL REMOVAL
+    setProposal((prev) => {
+      if (!prev) return prev
+      const items = (prev.line_items || []).filter((i) => i.id !== itemId)
+      const newTotal = items.reduce((sum, i) => sum + Number(i.total_amount ?? i.total_cost ?? 0), 0)
+      return {
+        ...prev,
+        line_items: items,
+        total_amount: newTotal,
+      }
+    })
+    toast.success('Line item removed')
+
     try {
       await budgetApi.removeLineItem(itemId)
-      await load()
-      onChanged?.()
-      toast.success('Line item removed')
+      onChanged?.(true)
     } catch (err) {
+      await load(true)
       toast.error(getErrorMessage(err, "Couldn't remove that line item"))
     }
   }
@@ -93,8 +144,8 @@ function ProposalPanel({ proposalId, onChanged, role }) {
       if (action === 'submit') await budgetApi.submitProposal(proposalId)
       else if (action === 'approve') await budgetApi.approveProposal(proposalId, note)
       else if (action === 'reject') await budgetApi.rejectProposal(proposalId, note)
-      await load()
-      onChanged?.()
+      await load(true)
+      onChanged?.(true)
       toast.success(`Proposal marked as ${action}d!`)
     } catch (err) {
       toast.error(getErrorMessage(err, `Couldn't ${action} this proposal`))
@@ -279,8 +330,8 @@ function BudgetContent({ eventId }) {
   const canExport = role.level === 'event_admin' || role.level === 'finance_head'
   const canImport = role.level === 'event_admin' || role.level === 'finance_head'
 
-  const load = async () => {
-    setLoading(true)
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const [pData, dData] = await Promise.all([
         budgetApi.listProposals(eventId),
@@ -293,9 +344,9 @@ function BudgetContent({ eventId }) {
         setSelectedId(pList[0].id)
       }
     } catch {
-      setError("Couldn't load proposals")
+      if (!silent) setError("Couldn't load proposals")
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -588,7 +639,7 @@ function BudgetContent({ eventId }) {
             ))}
           </div>
           <div className="md:col-span-2">
-            {selectedId && <ProposalPanel proposalId={selectedId} onChanged={load} role={role} />}
+            {selectedId && <ProposalPanel proposalId={selectedId} onChanged={(silent) => load(silent)} role={role} />}
           </div>
         </div>
       )}
