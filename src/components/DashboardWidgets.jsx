@@ -165,9 +165,13 @@ export function DepartmentHealthCards({ departments = [], proposals = [], actual
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-primary-500/10 text-primary-400 border border-primary-500/20">
                     👤 {d.head_name}
                   </span>
+                ) : d.co_head_names ? (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                    ⭐ Co-Head: {d.co_head_names}
+                  </span>
                 ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                    ⚠️ Head Unassigned
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-slate-500/15 text-slate-300 border border-slate-500/30">
+                    📝 Planning Stage
                   </span>
                 )}
               </div>

@@ -341,13 +341,18 @@ function DepartmentsContent({ eventId }) {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-ink/70 block mb-1">Department Head (Optional)</label>
+                <label className="text-xs font-semibold text-ink/70 block mb-1">
+                  Department Head or Co-Head (Optional for Planning Stage)
+                </label>
                 <input
-                  placeholder="e.g. Rahul Sharma"
+                  placeholder="e.g. Rahul Sharma (or leave blank for Planning Stage)"
                   value={headName}
                   onChange={(e) => setHeadName(e.target.value)}
                   className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
                 />
+                <p className="text-[11px] text-ink/40 mt-1">
+                  💡 During the planning stage, you can leave this blank or assign Co-Heads anytime via Team Roster!
+                </p>
               </div>
 
               <div>

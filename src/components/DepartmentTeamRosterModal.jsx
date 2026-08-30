@@ -103,9 +103,36 @@ export default function DepartmentTeamRosterModal({ dept, eventId, eventUsers = 
                   )}
                 </div>
               ) : (
-                <p className="text-ink/40 italic">No Department Head appointed yet (currently: {dept.head_name || 'Unassigned'}).</p>
+                <p className="text-ink/40 italic">Planning Stage: Managed by Co-Heads (or Head Unassigned).</p>
               )}
             </div>
+
+            {/* Department Co-Heads Section */}
+            {roster.co_heads?.length > 0 && (
+              <div className="p-3.5 bg-purple-500/10 border border-purple-500/30 rounded-xl space-y-1.5">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-300 block">⭐ Department Co-Heads (Planning Stage)</span>
+                <div className="space-y-1.5">
+                  {roster.co_heads.map((co) => (
+                    <div key={co.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-300 font-bold flex items-center justify-center text-[10px]">
+                          ⭐
+                        </span>
+                        <div>
+                          <p className="font-bold text-ink text-xs">{co.name || co.email}</p>
+                          <p className="text-[10px] text-ink/50">{co.email}</p>
+                        </div>
+                      </div>
+                      {canManage && (
+                        <button onClick={() => handleRemove(co.id)} className="text-deficit-500 hover:text-deficit-600 text-xs font-semibold">
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Co-Workers / Volunteers Section */}
             <div className="space-y-2">
@@ -167,6 +194,7 @@ export default function DepartmentTeamRosterModal({ dept, eventId, eventUsers = 
                     className="bg-well border border-rule rounded-lg px-2.5 py-1.5 text-xs text-ink font-semibold"
                   >
                     <option value="volunteer">🤝 Co-Worker</option>
+                    <option value="co_head">⭐ Department Co-Head</option>
                     <option value="dept_head">👑 Dept Head</option>
                     <option value="event_admin">💼 Event Admin</option>
                     <option value="co_leader">🌟 Co-Leader (Full Authority)</option>
