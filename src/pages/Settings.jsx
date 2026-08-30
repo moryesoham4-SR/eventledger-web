@@ -313,7 +313,8 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
               <li>Delete any existing code and paste this copied script.</li>
               <li>Click <strong>Deploy</strong> ➔ <strong>New deployment</strong> ➔ Select type: <strong>Web app</strong>.</li>
               <li>Set <strong>Execute as</strong>: <code className="bg-well px-1 rounded text-emerald-400">Me</code>, <strong>Who has access</strong>: <code className="bg-well px-1 rounded text-emerald-400">Anyone</code>.</li>
-              <li>Click <strong>Deploy</strong>, copy the generated Web App URL and paste it above!</li>
+              <li>Click <strong>Deploy</strong> ➔ Authorize access ➔ Click <strong>Advanced</strong> ➔ <strong>Go to script (allow)</strong>.</li>
+              <li>Copy the generated Web App URL and paste it above!</li>
             </ol>
 
             <div className="relative">
