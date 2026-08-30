@@ -206,6 +206,7 @@ const labelClass = 'block text-xs font-semibold text-ink/60 uppercase tracking-w
 export default function Settings() {
   const { theme, setTheme } = useTheme()
   const { user, updateUser, logout } = useAuth()
+  const { activeEventId } = useActiveEvent()
   const toast = useToast()
   const navigate = useNavigate()
 
