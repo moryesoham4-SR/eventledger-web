@@ -205,7 +205,11 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
     }
   }
 
-  const handleCopyScript = () => {
+  const handleCopyScript = (e) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
     try {
       navigator.clipboard.writeText(scriptTemplate)
       setCopied(true)
