@@ -50,16 +50,25 @@ function ProposalPanel({ proposalId, onChanged, role }) {
 
   const handleAddItem = async (e) => {
     e.preventDefault()
+    const qty = Number(newItem.quantity) || 1
+    const cost = Number(newItem.estimated_cost) || 0
+    const total = qty * cost
+
     try {
       await budgetApi.addLineItem({
         proposal_id: proposalId,
-        ...newItem,
-        quantity: Number(newItem.quantity) || 1,
-        estimated_cost: Number(newItem.estimated_cost),
+        category: newItem.category || 'General',
+        item_name: newItem.item_name,
+        description: newItem.description || '',
+        quantity: qty,
+        unit: newItem.unit || 'unit',
+        unit_price: cost,
+        estimated_cost: cost,
+        total_amount: total,
       })
       setNewItem({ category: '', item_name: '', description: '', quantity: 1, unit: 'unit', estimated_cost: '' })
       setShowItemForm(false)
-      load()
+      await load()
       onChanged?.()
       toast.success('Line item added')
     } catch (err) {
@@ -71,7 +80,7 @@ function ProposalPanel({ proposalId, onChanged, role }) {
     if (!(await confirm('Remove this line item?', { danger: true, confirmLabel: 'Remove' }))) return
     try {
       await budgetApi.removeLineItem(itemId)
-      load()
+      await load()
       onChanged?.()
       toast.success('Line item removed')
     } catch (err) {
@@ -84,7 +93,7 @@ function ProposalPanel({ proposalId, onChanged, role }) {
       if (action === 'submit') await budgetApi.submitProposal(proposalId)
       else if (action === 'approve') await budgetApi.approveProposal(proposalId, note)
       else if (action === 'reject') await budgetApi.rejectProposal(proposalId, note)
-      load()
+      await load()
       onChanged?.()
       toast.success(`Proposal marked as ${action}d!`)
     } catch (err) {
@@ -191,24 +200,29 @@ function ProposalPanel({ proposalId, onChanged, role }) {
           <p className="text-xs text-ink/40 py-4 text-center border border-dashed border-rule rounded-lg">No line items added yet.</p>
         ) : (
           <div className="border border-rule rounded-lg overflow-hidden divide-y divide-rule">
-            {proposal.line_items.map((item) => (
-              <div key={item.id} className="flex items-center justify-between p-3 text-xs">
-                <div>
-                  <p className="font-semibold text-ink">{item.item_name}</p>
-                  <p className="text-[11px] text-ink/50">
-                    {item.category} · {item.quantity} × {formatMoney(item.estimated_cost)}
-                  </p>
+            {proposal.line_items.map((item) => {
+              const itemUnitPrice = Number(item.unit_price ?? item.estimated_cost ?? 0)
+              const itemTotal = Number(item.total_amount ?? item.total_cost ?? (item.quantity * itemUnitPrice))
+
+              return (
+                <div key={item.id} className="flex items-center justify-between p-3 text-xs">
+                  <div>
+                    <p className="font-semibold text-ink">{item.item_name}</p>
+                    <p className="text-[11px] text-ink/50">
+                      {item.category} · {item.quantity} {item.unit || 'unit'} × {formatMoney(itemUnitPrice)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-ink">{formatMoney(itemTotal)}</span>
+                    {canEditLineItems && (
+                      <button onClick={() => handleRemoveItem(item.id)} className="text-deficit-500 hover:text-deficit-600">
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-bold text-ink">{formatMoney(item.total_cost)}</span>
-                  {canEditLineItems && (
-                    <button onClick={() => handleRemoveItem(item.id)} className="text-deficit-500 hover:text-deficit-600">
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
