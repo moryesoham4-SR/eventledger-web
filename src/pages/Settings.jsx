@@ -32,9 +32,16 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
     }
   }, [activeEventId])
 
+  const isSheetUrl = webhookUrl.includes('docs.google.com/spreadsheets')
+  const isValidWebhook = webhookUrl.includes('script.google.com/macros/s')
+
   const handleSaveConfig = async (e) => {
     e.preventDefault()
     if (!activeEventId) return
+    if (isSheetUrl) {
+      toast.error('Please paste the Apps Script Web App URL (script.google.com), not the Spreadsheet URL.')
+      return
+    }
     setSaving(true)
     try {
       await integrationsApi.saveGoogleSheetsConfig({
@@ -52,6 +59,11 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
 
   const handleSyncAll = async () => {
     if (!activeEventId) return
+    if (isSheetUrl) {
+      toast.error('Please deploy the Apps Script and use the script.google.com Web App URL!')
+      setShowScriptModal(true)
+      return
+    }
     setSyncing(true)
     try {
       const res = await integrationsApi.triggerSyncAll(Number(activeEventId))
@@ -94,8 +106,31 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
             placeholder="https://script.google.com/macros/s/.../exec"
             value={webhookUrl}
             onChange={(e) => setWebhookUrl(e.target.value)}
-            className="w-full bg-well text-ink border border-rule rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+            className={`w-full bg-well text-ink border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+              isSheetUrl ? 'border-amber-500/80 focus:ring-amber-500/40' : 'border-rule focus:ring-primary-500/40'
+            }`}
           />
+
+          {isSheetUrl && (
+            <div className="mt-2.5 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left animate-fade-in">
+              <div className="flex items-start gap-2">
+                <span className="text-base leading-none">⚠️</span>
+                <div className="text-xs text-amber-200 space-y-1">
+                  <p className="font-bold text-amber-300">You pasted your Google Sheet document URL!</p>
+                  <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                    To receive live data, you need to paste the <strong>Apps Script Web App URL</strong> (starts with <code className="bg-black/30 px-1 py-0.5 rounded text-amber-300">https://script.google.com/macros/s/</code>).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowScriptModal(true)}
+                    className="inline-block mt-1 font-bold text-xs text-amber-300 underline hover:text-white"
+                  >
+                    👉 Click here for 1-Click Code & Setup Steps
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between pt-1">
