@@ -18,11 +18,11 @@ const NAV_ITEMS = [
   { path: '/vendors', label: 'Vendors' },
   { path: '/sponsors', label: 'Sponsors' },
   { path: '/departments', label: 'Departments & Work' },
+  { path: '/users', label: '👥 Users & Team' },
   { path: '/leaderboard', label: '🏆 Leaderboard & Awards' },
   { path: '/notifications', label: 'Notifications' },
   { path: '/settings', label: 'Settings' },
 ]
-const SUPER_ADMIN_NAV_ITEMS = [{ path: '/users', label: 'Users' }]
 
 export default function Layout() {
   const { user, logout } = useAuth()
@@ -33,7 +33,7 @@ export default function Layout() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [pendingTaskCount, setPendingTaskCount] = useState(0)
 
-  const navItems = user?.is_super_admin ? [...NAV_ITEMS, ...SUPER_ADMIN_NAV_ITEMS] : NAV_ITEMS
+  const navItems = NAV_ITEMS
 
   useEffect(() => {
     const fetchUnread = () => {

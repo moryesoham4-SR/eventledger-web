@@ -3,6 +3,7 @@ import * as usersApi from '../api/users'
 import * as departmentsApi from '../api/departments'
 import { useAuth } from '../context/AuthContext'
 import { useActiveEvent } from '../context/EventContext'
+import { useMyRole } from '../hooks/useMyRole'
 import { getErrorMessage } from '../api/client'
 import { useToast } from '../context/ToastContext'
 
@@ -10,6 +11,8 @@ export default function Users() {
   const toast = useToast()
   const { user: currentUser } = useAuth()
   const { activeEventId } = useActiveEvent()
+  const role = useMyRole(activeEventId)
+
   const [tab, setTab] = useState('users')
   const [users, setUsers] = useState([])
   const [departments, setDepartments] = useState([])
@@ -55,8 +58,7 @@ export default function Users() {
   }
 
   useEffect(() => {
-    if (currentUser?.is_super_admin) load()
-    else setLoading(false)
+    load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, activeEventId])
 
@@ -72,10 +74,12 @@ export default function Users() {
     )
   })
 
-  if (!currentUser?.is_super_admin) {
+  const canManageTeam = currentUser?.is_super_admin || role.canManageInvites || role.canManageDepartments || role.level === 'event_admin' || role.level === 'co_leader' || role.level === 'co_host'
+
+  if (!canManageTeam && !loading && users.length === 0) {
     return (
       <div className="bg-card border border-rule rounded-xl p-8 text-center">
-        <p className="text-ink/70">This section is available to Super Admins only.</p>
+        <p className="text-ink/70">Team management is available to Event Admins, Co-Leaders, and Super Admins.</p>
       </div>
     )
   }
