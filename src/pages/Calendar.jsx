@@ -6,16 +6,19 @@ import * as departmentsApi from '../api/departments'
 import * as usersApi from '../api/users'
 import * as vendorsApi from '../api/vendors'
 import { useToast } from '../context/ToastContext'
+import { useConfirm } from '../context/ConfirmContext'
 import { useMyRole } from '../hooks/useMyRole'
 import { getErrorMessage } from '../api/client'
 
 function CalendarContent({ eventId }) {
   const toast = useToast()
+  const { promptText, confirm } = useConfirm()
   const role = useMyRole(eventId)
 
   const [currentDate, setCurrentDate] = useState(new Date())
   const [event, setEvent] = useState(null)
   const [tasks, setTasks] = useState([])
+  const [auditReport, setAuditReport] = useState([])
   const [departments, setDepartments] = useState([])
   const [team, setTeam] = useState([])
   const [vendors, setVendors] = useState([])
@@ -23,6 +26,8 @@ function CalendarContent({ eventId }) {
 
   const [selectedDay, setSelectedDay] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [auditModalOpen, setAuditModalOpen] = useState(false)
+  const [demeritModalOpen, setDemeritModalOpen] = useState(false)
 
   // Task creation form modal state
   const [taskModalOpen, setTaskModalOpen] = useState(false)
@@ -34,19 +39,27 @@ function CalendarContent({ eventId }) {
   const [taskDesc, setTaskDesc] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  // Demerit penalty form state
+  const [demeritDeptId, setDemeritDeptId] = useState('')
+  const [demeritPointsVal, setDemeritPointsVal] = useState(1)
+  const [demeritReason, setDemeritReason] = useState('')
+  const [penalizing, setPenalizing] = useState(false)
+
   const loadAllData = async () => {
     if (!eventId) return
     setLoading(true)
     try {
-      const [evData, tasksList, deptsList, teamList, vendorsList] = await Promise.all([
+      const [evData, tasksList, auditList, deptsList, teamList, vendorsList] = await Promise.all([
         eventsApi.getEvent(eventId).catch(() => null),
         tasksApi.listTasks(eventId).catch(() => []),
+        tasksApi.getTaskAuditReport(eventId).catch(() => []),
         departmentsApi.listDepartments(eventId).catch(() => []),
         usersApi.getEventTeam(eventId).catch(() => []),
         vendorsApi.listVendors(eventId).catch(() => []),
       ])
       setEvent(evData)
       setTasks(tasksList)
+      setAuditReport(auditList)
       setDepartments(deptsList)
       setTeam(teamList)
       setVendors(vendorsList)
@@ -119,21 +132,64 @@ function CalendarContent({ eventId }) {
     }
   }
 
-  const handleToggleTaskStatus = async (task) => {
-    const nextStatus = task.status === 'completed' ? 'pending' : task.status === 'pending' ? 'in_progress' : 'completed'
+  const handleStatusChangeWithReason = async (task, targetStatus) => {
+    const isOverdue = task.deadline && task.deadline < new Date().toISOString().split('T')[0]
+    let incomplete_reason = ''
+
+    if (targetStatus === 'incomplete' || (isOverdue && targetStatus !== 'completed')) {
+      const reasonInput = await promptText('Compulsory: Why was this work incomplete or delayed?', {
+        title: 'Task Delay / Incomplete Explanation',
+        placeholder: 'e.g. Vendor delayed material delivery by 2 days',
+        confirmLabel: 'Submit Explanation',
+        danger: true,
+      })
+      if (reasonInput === null) return
+      if (!reasonInput.trim()) {
+        toast.error('A written explanation for delayed or incomplete work is compulsory!')
+        return
+      }
+      incomplete_reason = reasonInput.trim()
+    }
+
     try {
-      await tasksApi.updateTask(task.id, { status: nextStatus })
-      toast.success(`Task status updated to "${nextStatus.replace('_', ' ')}"`)
+      await tasksApi.updateTask(task.id, {
+        status: targetStatus,
+        incomplete_reason: incomplete_reason || undefined,
+      })
+      toast.success(`Task status updated to "${targetStatus.replace('_', ' ')}"`)
       loadAllData()
     } catch (err) {
-      toast.error('Failed to update task status')
+      toast.error(getErrorMessage(err, 'Failed to update task status'))
+    }
+  }
+
+  const handleApplyDemerit = async (e) => {
+    e.preventDefault()
+    if (!demeritDeptId || !demeritReason.trim()) {
+      toast.error('Please select a department and enter a compulsory penalty reason')
+      return
+    }
+    setPenalizing(true)
+    try {
+      await departmentsApi.penalizeDepartmentDemerits(Number(demeritDeptId), {
+        demerit_points: Number(demeritPointsVal) || 1,
+        reason: demeritReason.trim(),
+      })
+      toast.success(`Assigned ${demeritPointsVal} Demerit Point(s) to Department! ⚠️`)
+      setDemeritModalOpen(false)
+      setDemeritReason('')
+      loadAllData()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to penalize department demerit points'))
+    } finally {
+      setPenalizing(false)
     }
   }
 
   // Filter tasks for a given day
   const getItemsForDay = (dateStr) => {
     const dayTasks = tasks.filter((t) => t.deadline === dateStr)
-    const dayVendors = vendors.filter((v) => v.status === 'pending') // could have deadlines
+    const dayVendors = vendors.filter((v) => v.status === 'pending')
     const isEventStart = event?.start_date === dateStr
     const isEventEnd = event?.end_date === dateStr
     return { dayTasks, dayVendors, isEventStart, isEventEnd }
@@ -155,7 +211,7 @@ function CalendarContent({ eventId }) {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="font-display text-3xl font-semibold text-ink flex items-center gap-3">
-            <span>📅 Event Calendar & Work Deadlines</span>
+            <span>📅 Event Calendar & Task Audit</span>
             {pendingTasksCount > 0 && (
               <span className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-xs">
                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
@@ -164,17 +220,31 @@ function CalendarContent({ eventId }) {
             )}
           </h2>
           <p className="text-sm text-ink/55 mt-0.5">
-            Track department task deadlines, event milestones, and team member assignments.
+            Track department task deadlines, compulsory delay reasons, demerit points, and audit compliance.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {role.canManageWorkTasks && (
-            <button
-              onClick={() => setTaskModalOpen(true)}
-              className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-full transition-all active:scale-95 flex items-center gap-1.5 shadow-xs"
-            >
-              <span>+</span> Assign Work Task
-            </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setAuditModalOpen(true)}
+            className="border border-primary-500/40 text-primary-400 hover:bg-primary-500/10 text-xs font-semibold px-4 py-2 rounded-full transition-all flex items-center gap-1.5 shadow-xs"
+          >
+            📋 Task Audit Report
+          </button>
+          {(role.canManageWorkTasks || role.is_super_admin) && (
+            <>
+              <button
+                onClick={() => setDemeritModalOpen(true)}
+                className="border border-deficit-500/40 text-deficit-400 hover:bg-deficit-500/10 text-xs font-semibold px-4 py-2 rounded-full transition-all flex items-center gap-1.5 shadow-xs"
+              >
+                ⚠️ Penalize Demerit Points
+              </button>
+              <button
+                onClick={() => setTaskModalOpen(true)}
+                className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-full transition-all active:scale-95 flex items-center gap-1.5 shadow-xs"
+              >
+                <span>+</span> Assign Work Task
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -284,6 +354,8 @@ function CalendarContent({ eventId }) {
                         className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border truncate flex items-center justify-between ${
                           t.status === 'completed'
                             ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 line-through opacity-60'
+                            : t.status === 'incomplete'
+                            ? 'bg-deficit-500/20 text-deficit-400 border-deficit-500/40'
                             : t.priority === 'urgent' || t.priority === 'high'
                             ? 'bg-deficit-500/15 text-deficit-400 border-deficit-500/30'
                             : 'bg-primary-500/10 text-primary-300 border-primary-500/20'
@@ -351,6 +423,8 @@ function CalendarContent({ eventId }) {
                               className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
                                 t.status === 'completed'
                                   ? 'bg-emerald-500/20 text-emerald-400'
+                                  : t.status === 'incomplete'
+                                  ? 'bg-deficit-500/20 text-deficit-400'
                                   : t.status === 'in_progress'
                                   ? 'bg-amber-500/20 text-amber-400'
                                   : 'bg-ink/10 text-ink/70'
@@ -363,14 +437,31 @@ function CalendarContent({ eventId }) {
                           <p className="text-xs text-ink/50 mt-1">
                             👤 Assigned to: <strong className="text-ink/80">{t.assignee_name || t.assigned_to_name || 'Unassigned'}</strong>
                           </p>
+                          {t.incomplete_reason && (
+                            <p className="text-xs text-deficit-400 font-medium mt-1 bg-deficit-500/10 p-2 rounded border border-deficit-500/30">
+                              ⚠️ Delay Explanation: {t.incomplete_reason}
+                            </p>
+                          )}
                         </div>
 
-                        <button
-                          onClick={() => handleToggleTaskStatus(t)}
-                          className="text-xs font-semibold px-2.5 py-1 border border-rule rounded-lg bg-card hover:bg-well text-ink transition-colors whitespace-nowrap"
-                        >
-                          {t.status === 'completed' ? 'Mark Pending' : 'Mark Complete ✓'}
-                        </button>
+                        <div className="flex flex-col gap-1 text-right">
+                          {t.status !== 'completed' && (
+                            <button
+                              onClick={() => handleStatusChangeWithReason(t, 'completed')}
+                              className="text-[11px] font-semibold px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              Mark Complete ✓
+                            </button>
+                          )}
+                          {t.status !== 'incomplete' && (
+                            <button
+                              onClick={() => handleStatusChangeWithReason(t, 'incomplete')}
+                              className="text-[11px] font-semibold px-2.5 py-1 border border-deficit-500/30 text-deficit-400 hover:bg-deficit-500/10 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              Mark Incomplete ❌
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -499,6 +590,170 @@ function CalendarContent({ eventId }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Demerit Penalty Modal */}
+      {demeritModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-card border border-rule rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
+            <div className="p-5 border-b border-rule flex items-center justify-between bg-deficit-500/10">
+              <h3 className="font-display text-lg font-bold text-deficit-400 flex items-center gap-2">
+                ⚠️ Issue Department Demerit Points
+              </h3>
+              <button onClick={() => setDemeritModalOpen(false)} className="text-ink/40 hover:text-ink text-xl font-bold px-2">✕</button>
+            </div>
+
+            <form onSubmit={handleApplyDemerit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink/70 mb-1">Target Department *</label>
+                <select
+                  required
+                  value={demeritDeptId}
+                  onChange={(e) => setDemeritDeptId(e.target.value)}
+                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink focus:outline-hidden focus:border-deficit-500"
+                >
+                  <option value="">Select department...</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink/70 mb-1">Demerit Points Penalty *</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  required
+                  value={demeritPointsVal}
+                  onChange={(e) => setDemeritPointsVal(e.target.value)}
+                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink focus:outline-hidden focus:border-deficit-500 font-bold"
+                />
+                <p className="text-[11px] text-ink/50 mt-1">Each demerit point reduces department Efficiency XP score by 5 XP.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink/70 mb-1">Compulsory Penalty Reason *</label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="e.g. Failed to submit stage design deliverables on deadline date..."
+                  value={demeritReason}
+                  onChange={(e) => setDemeritReason(e.target.value)}
+                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink focus:outline-hidden focus:border-deficit-500"
+                />
+              </div>
+
+              <div className="p-4 border-t border-rule bg-well/30 flex justify-end gap-2 -mx-5 -mb-5 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setDemeritModalOpen(false)}
+                  className="text-xs font-semibold px-4 py-2 border border-rule rounded-xl bg-card text-ink hover:border-ink/30"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={penalizing}
+                  className="bg-deficit-600 hover:bg-deficit-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all disabled:opacity-50"
+                >
+                  {penalizing ? 'Penalizing…' : '⚠️ Confirm Demerit Penalty'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Task Audit Report Modal */}
+      {auditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in">
+          <div className="bg-card border border-rule rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-rule flex items-center justify-between bg-well/40">
+              <div>
+                <h3 className="font-display text-xl font-bold text-ink flex items-center gap-2">
+                  📋 Task Performance & Audit Compliance Report
+                </h3>
+                <p className="text-xs text-ink/60 mt-0.5">
+                  Complete tracking log of task assignments, assigners, deadlines, completion times, delay explanations, and penalties.
+                </p>
+              </div>
+              <button onClick={() => setAuditModalOpen(false)} className="text-ink/40 hover:text-ink text-xl font-bold px-2">✕</button>
+            </div>
+
+            <div className="p-5 overflow-x-auto flex-1">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-rule bg-well/60 text-ink/70 font-bold uppercase tracking-wider">
+                    <th className="py-2.5 px-3">Task Name</th>
+                    <th className="py-2.5 px-3">Assigned By</th>
+                    <th className="py-2.5 px-3">Assigned To</th>
+                    <th className="py-2.5 px-3">Department</th>
+                    <th className="py-2.5 px-3">Deadline</th>
+                    <th className="py-2.5 px-3">Completed At</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3">Delay / Incomplete Reason</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-rule text-ink">
+                  {auditReport.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-ink/40">
+                        No task audit records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    auditReport.map((row) => (
+                      <tr key={row.id} className="hover:bg-well/30 transition-colors">
+                        <td className="py-3 px-3">
+                          <p className="font-bold text-ink">{row.title}</p>
+                          {row.description && <p className="text-[11px] text-ink/50 truncate max-w-xs">{row.description}</p>}
+                        </td>
+                        <td className="py-3 px-3 font-medium text-ink/80">{row.assigner_label}</td>
+                        <td className="py-3 px-3 font-semibold text-primary-400">{row.assignee_label}</td>
+                        <td className="py-3 px-3">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold text-white" style={{ backgroundColor: row.dept_color || '#6366f1' }}>
+                            {row.dept_name}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 font-medium">{row.deadline || '-'}</td>
+                        <td className="py-3 px-3 text-ink/70">{row.completed_at ? new Date(row.completed_at).toLocaleString() : '-'}</td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                            row.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                            row.status === 'incomplete' ? 'bg-deficit-500/20 text-deficit-400' :
+                            row.is_overdue ? 'bg-amber-500/20 text-amber-400' : 'bg-ink/10 text-ink/70'
+                          }`}>
+                            {row.is_overdue ? '⚠️ Overdue' : row.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 max-w-xs">
+                          {row.incomplete_reason ? (
+                            <span className="text-deficit-400 text-[11px] font-medium bg-deficit-500/10 px-2 py-1 rounded block border border-deficit-500/20">
+                              {row.incomplete_reason}
+                            </span>
+                          ) : (
+                            <span className="text-ink/30">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-4 border-t border-rule bg-well/30 flex justify-end">
+              <button
+                onClick={() => setAuditModalOpen(false)}
+                className="text-xs font-semibold px-4 py-2 border border-rule rounded-xl bg-card text-ink hover:border-ink/30"
+              >
+                Close Audit Report
+              </button>
+            </div>
           </div>
         </div>
       )}

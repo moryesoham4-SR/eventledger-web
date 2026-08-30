@@ -93,14 +93,18 @@ function ProposalPanel({ proposalId, onChanged, role }) {
   }
 
   const handleRejectPrompt = async () => {
-    const reason = await promptText('Reason for rejection (optional):', {
+    const reason = await promptText('Reason for rejection (compulsory):', {
       title: 'Reject Proposal',
       placeholder: 'e.g. Total cost exceeds allocated department cap',
       confirmLabel: 'Reject Proposal',
       danger: true,
     })
     if (reason === null) return
-    handleStatusChange('reject', reason || '')
+    if (!reason.trim()) {
+      toast.error('A written reason for rejection is compulsory!')
+      return
+    }
+    handleStatusChange('reject', reason.trim())
   }
 
   return (
@@ -276,7 +280,7 @@ function BudgetContent({ eventId }) {
       }
     } catch {
       setError("Couldn't load proposals")
-    } finally {
+    } font-finally {
       setLoading(false)
     }
   }

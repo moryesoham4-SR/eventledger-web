@@ -8,7 +8,7 @@ import { useConfirm } from '../context/ConfirmContext'
 
 export default function ReimbursementsTab({ eventId, role, currency = 'INR' }) {
   const toast = useToast()
-  const { confirm } = useConfirm()
+  const { confirm, promptText } = useConfirm()
 
   const [claims, setClaims] = useState([])
   const [departments, setDepartments] = useState([])
@@ -73,8 +73,23 @@ export default function ReimbursementsTab({ eventId, role, currency = 'INR' }) {
   }
 
   const handleDeptHeadApprove = async (claimId, status) => {
+    let notes = ''
+    if (status === 'rejected') {
+      const reason = await promptText('Reason for rejecting claim (compulsory):', {
+        title: 'Reject Claim',
+        placeholder: 'e.g. Invalid receipt or non-budgeted personal item',
+        confirmLabel: 'Reject Claim',
+        danger: true,
+      })
+      if (reason === null) return
+      if (!reason.trim()) {
+        toast.error('A written reason for rejection is compulsory!')
+        return
+      }
+      notes = reason.trim()
+    }
     try {
-      await reimbursementsApi.deptHeadApproveClaim(claimId, { status, notes: '' })
+      await reimbursementsApi.deptHeadApproveClaim(claimId, { status, notes })
       toast.success(status === 'approved' ? 'Claim verified by Dept Head! Sent to Finance for final payout.' : 'Claim rejected')
       loadData()
     } catch (err) {
@@ -151,115 +166,98 @@ export default function ReimbursementsTab({ eventId, role, currency = 'INR' }) {
       {loading ? (
         <div className="skeleton h-48 rounded-xl" />
       ) : safeClaims.length === 0 ? (
-        <div className="bg-card border border-dashed border-rule rounded-xl p-10 text-center">
-          <p className="text-3xl mb-2">📥</p>
-          <p className="text-sm text-ink/60">No reimbursement claims submitted yet.</p>
+        <div className="bg-card border border-dashed border-rule rounded-xl p-8 text-center">
+          <p className="text-2xl mb-2">📥</p>
+          <p className="text-xs text-ink/60">No co-worker reimbursement claims submitted yet.</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {safeClaims.map((c) => {
-            const isDeptApproved = c.dept_head_status === 'approved'
-            const isDeptRejected = c.dept_head_status === 'rejected'
-            const isPaidOut = c.finance_status === 'paid_out'
-            const isFinanceRejected = c.finance_status === 'rejected'
-            const canDeptApprove = (role.level === 'dept_head' && String(role.deptId) === String(c.department_id)) || isFinanceHead
+        <div className="space-y-3">
+          {safeClaims.map((claim) => {
+            const isDeptHeadOfThis = role.level === 'dept_head' && String(role.deptId) === String(claim.department_id)
+            const canDeptReview = claim.dept_head_status === 'pending' && (role.level === 'event_admin' || isDeptHeadOfThis || role.is_super_admin)
+            const canFinanceReview = claim.dept_head_status === 'approved' && claim.finance_status !== 'paid_out' && isFinanceHead
+            const canDelete = claim.claimed_by_user_id === role.userId || role.level === 'event_admin' || role.is_super_admin
 
             return (
-              <div key={c.id} className="lift bg-card border border-rule rounded-2xl p-5 space-y-4 shadow-xs">
-                <div className="flex items-start justify-between flex-wrap gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-display text-base font-bold text-ink">{c.item_name}</h4>
-                      <span className="text-xs font-semibold px-2.5 py-0.5 bg-primary-500/15 text-primary-400 rounded-full border border-primary-500/30">
-                        🏢 {c.dept_name}
-                      </span>
-                      <span className="text-xs text-ink/50 font-medium">({c.category})</span>
-                    </div>
-
-                    <p className="text-xs text-ink/60">
-                      Claimed by: <strong className="text-ink">{c.claimed_by_name}</strong> ({c.user_email})
-                    </p>
+              <div key={claim.id} className="bg-card border border-rule rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+                <div className="space-y-1 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-sm text-ink">{claim.item_name}</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded text-white" style={{ backgroundColor: claim.dept_color || '#6366f1' }}>
+                      {claim.dept_name}
+                    </span>
+                    <span className="text-xs text-ink/50">({claim.category})</span>
                   </div>
 
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Claim Amount</p>
-                    <p className="figure text-xl font-bold text-ink">{formatMoney(c.amount, currency)}</p>
+                  <p className="text-xs text-ink/60">
+                    Claimant: <strong className="text-ink">{claim.claimed_by_name}</strong>
+                    {claim.notes && ` · Notes: ${claim.notes}`}
+                  </p>
+
+                  <div className="flex items-center gap-2 pt-1 flex-wrap text-[11px]">
+                    <span className={`px-2 py-0.5 rounded font-bold uppercase ${
+                      claim.dept_head_status === 'approved' ? 'bg-emerald-500/20 text-emerald-400' :
+                      claim.dept_head_status === 'rejected' ? 'bg-deficit-500/20 text-deficit-400' :
+                      'bg-amber-500/20 text-amber-400'
+                    }`}>
+                      Stage 1 (Dept): {claim.dept_head_status}
+                    </span>
+
+                    <span className={`px-2 py-0.5 rounded font-bold uppercase ${
+                      claim.finance_status === 'paid_out' ? 'bg-emerald-500/20 text-emerald-400' :
+                      claim.finance_status === 'rejected' ? 'bg-deficit-500/20 text-deficit-400' :
+                      'bg-primary-500/20 text-primary-400'
+                    }`}>
+                      Stage 2 (Finance): {claim.finance_status === 'paid_out' ? `Paid (${claim.payment_mode})` : claim.finance_status}
+                    </span>
+
+                    {claim.payout_reference && (
+                      <span className="text-ink/60 font-mono">Ref/UTR: {claim.payout_reference}</span>
+                    )}
                   </div>
                 </div>
 
-                {/* Receipt Image / Proof Link */}
-                {c.receipt_url && (
-                  <div className="p-2.5 bg-well/40 border border-rule rounded-xl flex items-center justify-between text-xs">
-                    <span className="text-ink/70 font-medium flex items-center gap-1.5">
-                      🧾 Receipt Attachment:
-                    </span>
-                    <a
-                      href={c.receipt_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary-500 hover:underline font-semibold"
-                    >
-                      View Receipt File / Image ↗
-                    </a>
-                  </div>
-                )}
+                <div className="flex items-center gap-4 border-t md:border-t-0 pt-3 md:pt-0 border-rule justify-between md:justify-end">
+                  <span className="figure text-lg font-bold text-primary-400">{formatMoney(claim.amount, currency)}</span>
 
-                {/* 2-Stage Approval Badges & Action Buttons */}
-                <div className="p-3 bg-well/30 rounded-xl border border-rule flex items-center justify-between flex-wrap gap-3">
-                  <div className="flex items-center gap-3 flex-wrap text-xs">
-                    {/* Stage 1 Badge */}
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-ink/50 font-medium">1️⃣ Dept Head:</span>
-                      <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${
-                        isDeptApproved ? 'bg-positive-500/20 text-positive-400' : isDeptRejected ? 'bg-deficit-500/20 text-deficit-400' : 'bg-amber-500/20 text-amber-400'
-                      }`}>
-                        {isDeptApproved ? 'Verified ✓' : isDeptRejected ? 'Rejected ✕' : 'Pending Verification ⏳'}
-                      </span>
-                    </div>
-
-                    {/* Stage 2 Badge */}
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-ink/50 font-medium">2️⃣ Finance Head:</span>
-                      <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${
-                        isPaidOut ? 'bg-positive-500/20 text-positive-400' : isFinanceRejected ? 'bg-deficit-500/20 text-deficit-400' : 'bg-amber-500/20 text-amber-400'
-                      }`}>
-                        {isPaidOut ? `Paid Out (${c.payment_mode}) ✓` : isFinanceRejected ? 'Rejected ✕' : 'Pending Payout ⏳'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
                   <div className="flex items-center gap-2">
-                    {/* Dept Head Verification Action */}
-                    {!isPaidOut && canDeptApprove && (
-                      <div className="flex items-center gap-1.5">
+                    {canDeptReview && (
+                      <>
                         <button
-                          onClick={() => handleDeptHeadApprove(c.id, 'approved')}
-                          className={`text-xs font-semibold px-3 py-1 rounded-lg transition-all ${
-                            isDeptApproved ? 'bg-well text-ink/50' : 'bg-positive-600 text-white hover:bg-positive-700 shadow-xs'
-                          }`}
+                          onClick={() => handleDeptHeadApprove(claim.id, 'rejected')}
+                          className="px-3 py-1 border border-deficit-500/40 text-deficit-400 hover:bg-deficit-500/10 rounded-lg text-xs font-semibold transition-all"
                         >
-                          {isDeptApproved ? 'Dept Verified ✓' : 'Verify Claim ✓'}
+                          Reject
                         </button>
-                      </div>
+                        <button
+                          onClick={() => handleDeptHeadApprove(claim.id, 'approved')}
+                          className="px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs"
+                        >
+                          Verify Claim ✓
+                        </button>
+                      </>
                     )}
 
-                    {/* Finance Head Payout Action */}
-                    {isFinanceHead && isDeptApproved && !isPaidOut && (
+                    {canFinanceReview && (
                       <button
                         onClick={() => {
-                          setPayoutClaim(c)
+                          setPayoutClaim(claim)
                           setPayoutForm({ payment_mode: 'UPI', payout_reference: '', notes: '' })
                         }}
-                        className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-3 py-1 rounded-lg shadow-xs transition-all flex items-center gap-1"
+                        className="px-3.5 py-1.5 bg-positive-600 hover:bg-positive-700 text-white rounded-lg text-xs font-semibold transition-all shadow-xs"
                       >
-                        <span>💰</span> Approve & Pay Out
+                        Process Payout 💰
                       </button>
                     )}
 
-                    <button onClick={() => handleDeleteClaim(c.id)} className="text-xs text-deficit-500 hover:text-deficit-600 px-2 py-1">
-                      ✕
-                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={() => handleDeleteClaim(claim.id)}
+                        className="text-deficit-400 hover:text-deficit-500 text-xs px-2 py-1 font-semibold"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -268,84 +266,94 @@ export default function ReimbursementsTab({ eventId, role, currency = 'INR' }) {
         </div>
       )}
 
-      {/* Claim Submission Modal */}
+      {/* Submit Claim Modal */}
       {showSubmitModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-card border border-rule rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-rule pb-3">
-              <h3 className="font-display text-lg font-bold text-ink">Submit Reimbursement Claim</h3>
-              <button onClick={() => setShowSubmitModal(false)} className="text-ink/40 hover:text-ink text-sm">✕</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-card border border-rule rounded-2xl w-full max-w-lg shadow-xl overflow-hidden">
+            <div className="p-5 border-b border-rule flex items-center justify-between">
+              <h3 className="font-display text-lg font-semibold text-ink">📥 Submit Reimbursement Claim</h3>
+              <button onClick={() => setShowSubmitModal(false)} className="text-ink/40 hover:text-ink text-xl font-bold px-2">✕</button>
             </div>
 
-            <form onSubmit={handleSubmitClaim} className="space-y-3">
+            <form onSubmit={handleSubmitClaim} className="p-5 space-y-4">
               <div>
-                <label className="text-xs font-semibold text-ink/70 block mb-1">Department *</label>
+                <label className="block text-xs font-semibold text-ink/70 mb-1">Department *</label>
                 <select
                   required
                   value={form.department_id}
                   onChange={(e) => setForm({ ...form, department_id: e.target.value })}
-                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink font-semibold"
+                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink focus:outline-hidden focus:border-primary-500"
                 >
-                  <option value="">Select Department...</option>
+                  <option value="">Select department...</option>
                   {departments.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      🏢 {d.name}
-                    </option>
+                    <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-ink/70 block mb-1">Item / Expense Name *</label>
-                <input
-                  required
-                  placeholder="e.g. 50m Heavy Duty Stage Tape"
-                  value={form.item_name}
-                  onChange={(e) => setForm({ ...form, item_name: e.target.value })}
-                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-ink/70 block mb-1">Amount Spent (₹) *</label>
+                  <label className="block text-xs font-semibold text-ink/70 mb-1">Item Description *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Stage Cables & Tape"
+                    value={form.item_name}
+                    onChange={(e) => setForm({ ...form, item_name: e.target.value })}
+                    className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink focus:outline-hidden focus:border-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-ink/70 mb-1">Amount Spent (₹) *</label>
                   <input
                     type="number"
                     step="0.01"
                     required
-                    placeholder="e.g. 800"
+                    placeholder="0.00"
                     value={form.amount}
                     onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                    className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-ink/70 block mb-1">Category</label>
-                  <input
-                    placeholder="e.g. Equipment, Props"
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
+                    className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink focus:outline-hidden focus:border-primary-500 font-bold text-primary-400"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-ink/70 block mb-1">Receipt Image URL / File Link</label>
+                <label className="block text-xs font-semibold text-ink/70 mb-1">Bill / Receipt URL (Drive or Imgur link)</label>
                 <input
-                  placeholder="https://... (or Google Drive/Cloud receipt link)"
+                  type="text"
+                  placeholder="https://drive.google.com/..."
                   value={form.receipt_url}
                   onChange={(e) => setForm({ ...form, receipt_url: e.target.value })}
-                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
+                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink focus:outline-hidden focus:border-primary-500"
                 />
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2 border-t border-rule">
-                <button type="button" onClick={() => setShowSubmitModal(false)} className="px-4 py-2 text-xs font-semibold text-ink/60 hover:text-ink">
+              <div>
+                <label className="block text-xs font-semibold text-ink/70 mb-1">Additional Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="Payment details, shop name, or urgent reasons..."
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink focus:outline-hidden focus:border-primary-500"
+                />
+              </div>
+
+              <div className="p-4 border-t border-rule bg-well/30 flex justify-end gap-2 -mx-5 -mb-5 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowSubmitModal(false)}
+                  className="text-xs font-semibold px-4 py-2 border border-rule rounded-xl bg-card text-ink hover:border-ink/30"
+                >
                   Cancel
                 </button>
-                <button type="submit" disabled={submitting} className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xs">
-                  {submitting ? 'Submitting...' : 'Submit Claim'}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all disabled:opacity-50"
+                >
+                  {submitting ? 'Submitting…' : 'Submit Claim'}
                 </button>
               </div>
             </form>
@@ -355,49 +363,65 @@ export default function ReimbursementsTab({ eventId, role, currency = 'INR' }) {
 
       {/* Finance Payout Modal */}
       {payoutClaim && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-card border border-rule rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-rule pb-3">
-              <h3 className="font-display text-lg font-bold text-ink">Finance Payout Sign-Off</h3>
-              <button onClick={() => setPayoutClaim(null)} className="text-ink/40 hover:text-ink text-sm">✕</button>
-            </div>
-
-            <div className="bg-well/40 p-3 rounded-xl border border-rule text-xs space-y-1">
-              <p className="text-ink/60">Paying Out Claim To: <strong className="text-ink">{payoutClaim.claimed_by_name}</strong></p>
-              <p className="text-ink/60">Item: <strong className="text-ink">{payoutClaim.item_name}</strong> (🏢 {payoutClaim.dept_name})</p>
-              <p className="text-ink/60">Payout Amount: <strong className="text-positive-400 font-bold text-sm">{formatMoney(payoutClaim.amount, currency)}</strong></p>
-            </div>
-
-            <form onSubmit={handleFinancePayoutSubmit} className="space-y-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-card border border-rule rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
+            <div className="p-5 border-b border-rule flex items-center justify-between">
               <div>
-                <label className="text-xs font-semibold text-ink/70 block mb-1">Payment Mode *</label>
+                <h3 className="font-display text-lg font-bold text-ink">💰 Process Finance Payout</h3>
+                <p className="text-xs text-ink/60">Claimant: {payoutClaim.claimed_by_name} ({formatMoney(payoutClaim.amount, currency)})</p>
+              </div>
+              <button onClick={() => setPayoutClaim(null)} className="text-ink/40 hover:text-ink text-xl font-bold px-2">✕</button>
+            </div>
+
+            <form onSubmit={handleFinancePayoutSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink/70 mb-1">Payment Method</label>
                 <select
                   value={payoutForm.payment_mode}
                   onChange={(e) => setPayoutForm({ ...payoutForm, payment_mode: e.target.value })}
-                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink font-semibold"
+                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink focus:outline-hidden focus:border-primary-500"
                 >
-                  <option value="UPI">📲 UPI (GPay / PhonePe / Paytm)</option>
-                  <option value="Cash">💵 Cash</option>
-                  <option value="Bank Transfer">🏦 Bank Transfer</option>
+                  <option value="UPI">Google Pay / PhonePe / Paytm (UPI)</option>
+                  <option value="Cash">Cash Handout</option>
+                  <option value="Bank Transfer">NEFT / IMPS Bank Transfer</option>
                 </select>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-ink/70 block mb-1">Transaction UTR / Reference Number</label>
+                <label className="block text-xs font-semibold text-ink/70 mb-1">Transaction Ref / UPI UTR Number</label>
                 <input
-                  placeholder="e.g. UTR 423910291 or Voucher #102"
+                  type="text"
+                  placeholder="e.g. UTR-402910482019"
                   value={payoutForm.payout_reference}
                   onChange={(e) => setPayoutForm({ ...payoutForm, payout_reference: e.target.value })}
-                  className="w-full bg-well border border-rule rounded-lg px-3 py-2 text-xs text-ink"
+                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink focus:outline-hidden focus:border-primary-500 font-mono"
                 />
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2 border-t border-rule">
-                <button type="button" onClick={() => setPayoutClaim(null)} className="px-4 py-2 text-xs font-semibold text-ink/60 hover:text-ink">
+              <div>
+                <label className="block text-xs font-semibold text-ink/70 mb-1">Finance Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="Bank account note or payout voucher number..."
+                  value={payoutForm.notes}
+                  onChange={(e) => setPayoutForm({ ...payoutForm, notes: e.target.value })}
+                  className="w-full border border-rule rounded-lg px-3 py-2 text-xs bg-card text-ink focus:outline-hidden focus:border-primary-500"
+                />
+              </div>
+
+              <div className="p-4 border-t border-rule bg-well/30 flex justify-end gap-2 -mx-5 -mb-5 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setPayoutClaim(null)}
+                  className="text-xs font-semibold px-4 py-2 border border-rule rounded-xl bg-card text-ink hover:border-ink/30"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="bg-positive-600 hover:bg-positive-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-xs">
-                  Confirm Payout & Log to Expenses ✓
+                <button
+                  type="submit"
+                  className="bg-positive-600 hover:bg-positive-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-xs"
+                >
+                  Confirm Payout & Record Expense
                 </button>
               </div>
             </form>

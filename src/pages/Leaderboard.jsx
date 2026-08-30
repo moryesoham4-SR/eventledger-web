@@ -1,102 +1,73 @@
 import { useEffect, useState } from 'react'
 import RequireActiveEvent from '../components/RequireActiveEvent'
 import * as leaderboardApi from '../api/leaderboard'
+import * as usersApi from '../api/users'
 import CertificateModal from '../components/CertificateModal'
-import { useAuth } from '../context/AuthContext'
-import { useMyRole } from '../hooks/useMyRole'
 import { useToast } from '../context/ToastContext'
+import { useConfirm } from '../context/ConfirmContext'
+import { useMyRole } from '../hooks/useMyRole'
 
 function LeaderboardContent({ eventId }) {
   const toast = useToast()
-  const { user } = useAuth()
+  const { confirm } = useConfirm()
   const role = useMyRole(eventId)
-  const [data, setData] = useState({ departments: [], volunteers: [], certificates_enabled: false })
+
+  const [leaderboardData, setLeaderboardData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [certModalUser, setCertModalUser] = useState(null)
+  const [activeTab, setActiveTab] = useState('departments') // 'departments' | 'volunteers'
   const [togglingCert, setTogglingCert] = useState(false)
 
-  // Certificate Modal State
-  const [certModalData, setCertModalData] = useState(null)
-
-  const loadData = async () => {
+  const loadLeaderboard = async () => {
     if (!eventId) return
     setLoading(true)
     try {
-      const res = await leaderboardApi.getLeaderboard(eventId)
-      setData(res || { departments: [], volunteers: [], certificates_enabled: false })
+      const data = await leaderboardApi.getEventLeaderboard(eventId)
+      setLeaderboardData(data)
     } catch {
-      setData({ departments: [], volunteers: [], certificates_enabled: false })
-    } finally {
+      toast.error('Failed to load leaderboard scores.')
+    } font-finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadData()
+    loadLeaderboard()
   }, [eventId])
 
-  const isEventAdmin = role.level === 'event_admin' || role.level === 'co_leader' || Boolean(user?.is_super_admin)
-  const isCertsUnlocked = Boolean(data.certificates_enabled)
-
   const handleToggleCertificates = async () => {
-    if (!isEventAdmin) return
+    const currentState = leaderboardData?.certificates_enabled
+    const nextState = !currentState
+    const actionWord = nextState ? 'UNLOCK and ALLOW' : 'LOCK and DISABLE'
+    
+    if (!(await confirm(`Are you sure you want to ${actionWord} Certificate Downloads for all team members?`, {
+      title: `${nextState ? 'Unlock' : 'Lock'} Master Certificate Downloads`,
+      confirmLabel: nextState ? 'Unlock Certificates' : 'Lock Certificates',
+      danger: !nextState,
+    }))) return
+
     setTogglingCert(true)
-    const nextState = !isCertsUnlocked
     try {
-      await leaderboardApi.toggleCertificates(Number(eventId), nextState)
-      toast.success(nextState ? '🔓 Certificate generation & downloads UNLOCKED for team!' : '🔒 Certificate generation LOCKED by Event Lead.')
-      loadData()
+      await leaderboardApi.toggleCertificateIssuance(eventId, nextState)
+      toast.success(nextState ? '🔓 Master Certificate Downloads UNLOCKED! Email notifications dispatched.' : '🔒 Certificate downloads locked.')
+      loadLeaderboard()
     } catch {
-      toast.error('Failed to update certificate switch')
+      toast.error('Failed to update certificate issuance state.')
     } finally {
       setTogglingCert(false)
     }
   }
 
-  const handleGenerateCertificate = async (vol) => {
-    if (!isEventAdmin && !isCertsUnlocked) {
-      toast.error('🔒 Certificate downloads are currently locked by the Event Director.')
+  const handleOpenCertificate = (volunteerUser) => {
+    if (!leaderboardData?.certificates_enabled && !role.canToggleCertificates) {
+      toast.error('🔒 Certificate downloads are currently locked by the Event Lead.')
       return
     }
-
-    const recipientName = vol.name || vol.email || 'Team Member'
-    const roleTitle = vol.role ? vol.role.replace('_', ' ').toUpperCase() : 'Co-Worker'
-    const deptTitle = vol.dept_name || 'Event Operations'
-
-    const fallbackPayload = {
-      event_title: 'Event Fest 2026',
-      organization_name: 'Event Management Board',
-      recipient_name: recipientName,
-      recipient_role: roleTitle,
-      department_name: deptTitle,
-      award_title: 'Certificate of Appreciation',
-      citation: 'In recognition of outstanding dedication, leadership, and exemplary event management service.',
-      signatory_1: { title: 'Event Admin / Lead', name: 'Event Director' },
-      signatory_2: { title: 'Faculty Coordinator', name: 'Dean of Student Affairs' },
-      issue_date: '2026',
-      certificate_id: `CERT-${eventId}-${vol.id || 99}-882`,
-    }
-
-    try {
-      const payload = await leaderboardApi.generateCertificatePayload({
-        event_id: Number(eventId),
-        user_name: recipientName,
-        user_role: roleTitle,
-        department_name: deptTitle,
-        award_title: 'Certificate of Appreciation',
-        citation: 'In recognition of outstanding dedication, leadership, and exemplary event management service.',
-        signatory_title_1: 'Event Admin / Lead',
-        signatory_name_1: 'Event Director',
-        signatory_title_2: 'Faculty Coordinator',
-        signatory_name_2: 'Dean of Student Affairs',
-      })
-      setCertModalData(payload || fallbackPayload)
-    } catch {
-      setCertModalData(fallbackPayload)
-    }
+    setCertModalUser(volunteerUser)
   }
 
-  const safeDepts = Array.isArray(data.departments) ? data.departments : []
-  const safeVolunteers = Array.isArray(data.volunteers) ? data.volunteers : []
+  const safeDepts = Array.isArray(leaderboardData?.departments) ? leaderboardData.departments : []
+  const safeVolunteers = Array.isArray(leaderboardData?.volunteers) ? leaderboardData.volunteers : []
   const topThree = safeDepts.slice(0, 3)
 
   return (
@@ -105,10 +76,10 @@ function LeaderboardContent({ eventId }) {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="font-display text-3xl font-bold text-ink flex items-center gap-2">
-            <span>🏆</span> Department Leaderboard & Awards
+            <span>🏆</span> Department Leaderboard & Audit
           </h2>
           <p className="text-sm text-ink/60 mt-1">
-            Real-time department efficiency rankings and digital certificate generator for co-workers & volunteers.
+            Real-time department efficiency rankings, demerit points penalties, and digital certificate generator.
           </p>
         </div>
       </div>
@@ -117,6 +88,44 @@ function LeaderboardContent({ eventId }) {
         <div className="skeleton h-64 rounded-2xl" />
       ) : (
         <div className="space-y-8">
+          {/* Master Certificate Toggle Control Banner for Event Lead / Super Admin */}
+          {role.canToggleCertificates && (
+            <div className="bg-card border border-rule rounded-2xl p-5 shadow-xs flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold ${
+                  leaderboardData?.certificates_enabled ? 'bg-positive-500/20 text-positive-400 border border-positive-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {leaderboardData?.certificates_enabled ? '🔓' : '🔒'}
+                </div>
+                <div>
+                  <h4 className="font-display text-sm font-bold text-ink flex items-center gap-2">
+                    Master Certificate Download Switch: 
+                    <span className={leaderboardData?.certificates_enabled ? 'text-positive-400 font-extrabold' : 'text-amber-400 font-extrabold'}>
+                      {leaderboardData?.certificates_enabled ? 'UNLOCKED' : 'LOCKED'}
+                    </span>
+                  </h4>
+                  <p className="text-xs text-ink/55 mt-0.5">
+                    {leaderboardData?.certificates_enabled
+                      ? 'Team members can preview & download their official digital certificates.'
+                      : 'Team members are restricted from downloading certificates until you unlock this toggle.'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleToggleCertificates}
+                disabled={togglingCert}
+                className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all shadow-xs active:scale-95 flex items-center gap-2 ${
+                  leaderboardData?.certificates_enabled
+                    ? 'bg-deficit-600 hover:bg-deficit-700 text-white'
+                    : 'bg-positive-600 hover:bg-positive-700 text-white'
+                }`}
+              >
+                {togglingCert ? 'Updating…' : leaderboardData?.certificates_enabled ? '🔒 Lock Downloads' : '🔓 Unlock Certificates'}
+              </button>
+            </div>
+          )}
+
           {/* Department Leaderboard & Podium Section */}
           {safeDepts.length === 0 ? (
             <div className="bg-card border border-dashed border-rule rounded-2xl p-8 text-center space-y-2">
@@ -211,6 +220,12 @@ function LeaderboardContent({ eventId }) {
                           <p className="text-[10px] font-bold uppercase text-ink/40">Budget Efficiency</p>
                           <p className="font-semibold text-ink">{d.budget_efficiency}%</p>
                         </div>
+                        {d.demerit_points > 0 && (
+                          <div className="bg-deficit-500/10 border border-deficit-500/30 text-deficit-400 px-2.5 py-1 rounded-lg">
+                            <p className="text-[10px] font-bold uppercase">Demerits</p>
+                            <p className="font-extrabold text-xs">⚠️ {d.demerit_points} Pts (-{d.demerit_points * 5} XP)</p>
+                          </div>
+                        )}
                         <div>
                           <p className="text-[10px] font-bold uppercase text-ink/40">Efficiency Score</p>
                           <p className="figure font-extrabold text-primary-400 text-sm">{d.xp_score} XP</p>
@@ -223,105 +238,65 @@ function LeaderboardContent({ eventId }) {
             </>
           )}
 
-          {/* Master Certificate Download Control Banner */}
-          <div className="p-5 bg-gradient-to-r from-card to-well border border-rule rounded-2xl flex items-center justify-between gap-4 flex-wrap shadow-xs">
-            <div className="flex items-center gap-3">
-              <span className={`w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold border ${isCertsUnlocked ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
-                {isCertsUnlocked ? '🔓' : '🔒'}
-              </span>
+          {/* Volunteer Certificate Generator Section */}
+          <div className="space-y-4 pt-4 border-t border-rule">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
-                <h4 className="font-display font-bold text-ink text-sm flex items-center gap-2">
-                  Certificate Downloads: {isCertsUnlocked ? <span className="text-emerald-400">UNLOCKED 🔓</span> : <span className="text-amber-400">LOCKED 🔒</span>}
-                </h4>
+                <h3 className="font-display text-lg font-bold text-ink flex items-center gap-2">
+                  <span>📜</span> Digital Certificate Generator ({safeVolunteers.length})
+                </h3>
                 <p className="text-xs text-ink/55 mt-0.5">
-                  {isCertsUnlocked
-                    ? 'All co-workers and volunteers can now download their Certificate of Appreciation.'
-                    : 'Certificate downloads are locked. Team members cannot download certificates until unlocked by Event Lead.'}
+                  Click on any team member below to preview & print their official Certificate of Appreciation.
                 </p>
               </div>
             </div>
 
-            {isEventAdmin && (
-              <button
-                onClick={handleToggleCertificates}
-                disabled={togglingCert}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm ${
-                  isCertsUnlocked
-                    ? 'bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40'
-                    : 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500/40'
-                }`}
-              >
-                <span>{isCertsUnlocked ? '🔒 Lock Downloads' : '🔓 Unlock Downloads For Team'}</span>
-              </button>
-            )}
-          </div>
-
-          {/* Volunteer Certificate Issuance Roster */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-base font-bold text-ink flex items-center gap-2">
-                <span>📜</span> Team Roster & Digital Certificate Portal ({safeVolunteers.length})
-              </h3>
-            </div>
-
             {safeVolunteers.length === 0 ? (
-              <div className="p-6 bg-well/30 rounded-xl text-center text-xs text-ink/50 italic">
-                No active team members found for this event yet. Add team members under <strong>Departments</strong> or <strong>Users</strong> to generate certificates!
+              <div className="bg-card border border-dashed border-rule rounded-2xl p-6 text-center text-xs text-ink/50">
+                No active team members found in event roster. Assign team members in <strong>Users & Team</strong>!
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {safeVolunteers.map((v) => {
-                  const isSelf = String(user?.id) === String(v.id) || (user?.email && user.email === v.email)
-                  const isDeptHeadOfMember = role.level === 'dept_head' && String(role.deptId) === String(v.dept_id)
-                  const canIssue = isEventAdmin || (isCertsUnlocked && (isDeptHeadOfMember || isSelf))
-
-                  return (
-                    <div key={v.id} className="p-4 bg-card border border-rule rounded-xl flex items-center justify-between gap-3 shadow-xs">
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-full bg-well text-ink font-bold flex items-center justify-center text-xs border border-rule">
-                          {v.role === 'dept_head' ? '👑' : v.role === 'finance_head' ? '👔' : '🤝'}
-                        </span>
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <h4 className="font-bold text-ink text-sm">{v.name || v.email}</h4>
-                            {isSelf && (
-                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.2 bg-primary-500/20 text-primary-400 rounded">
-                                You
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-ink/50 capitalize">
-                            {v.role ? v.role.replace('_', ' ') : 'Team Member'} · {v.dept_name || 'Event Operations'}
-                          </p>
-                        </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {safeVolunteers.map((v) => (
+                  <div
+                    key={v.id}
+                    onClick={() => handleOpenCertificate(v)}
+                    className="p-3.5 bg-card border border-rule hover:border-primary-500/50 rounded-xl flex items-center justify-between gap-3 cursor-pointer hover:bg-well/40 transition-all shadow-xs group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="w-9 h-9 rounded-full text-white font-bold flex items-center justify-center text-xs shadow-xs"
+                        style={{ backgroundColor: v.avatar_color || '#6366f1' }}
+                      >
+                        {(v.name || v.email || 'V')[0].toUpperCase()}
                       </div>
-
-                      {canIssue ? (
-                        <button
-                          onClick={() => handleGenerateCertificate(v)}
-                          className="bg-primary-600/15 hover:bg-primary-600 text-primary-400 hover:text-white border border-primary-500/30 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-xs"
-                        >
-                          <span>📜</span> {isSelf ? 'My Certificate' : 'Certificate'}
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-amber-400/80 font-semibold italic px-2 py-1 bg-amber-500/10 rounded border border-amber-500/20 flex items-center gap-1">
-                          <span>🔒</span> Locked by Lead
-                        </span>
-                      )}
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-ink text-xs truncate group-hover:text-primary-400 transition-colors">
+                          {v.name || v.email}
+                        </h4>
+                        <p className="text-[10px] text-ink/50 truncate">
+                          {v.dept_name || 'Event Team'} · <span className="capitalize">{v.role.replace('_', ' ')}</span>
+                        </p>
+                      </div>
                     </div>
-                  )
-                })}
+
+                    <span className="text-xs font-bold text-primary-400 bg-primary-500/10 px-2 py-1 rounded-lg border border-primary-500/20 group-hover:bg-primary-500 group-hover:text-white transition-all whitespace-nowrap">
+                      Certificate 📜
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Certificate Modal */}
-      {certModalData && (
+      {/* Certificate Modal Component */}
+      {certModalUser && (
         <CertificateModal
-          certData={certModalData}
-          onClose={() => setCertModalData(null)}
+          volunteer={certModalUser}
+          eventName={event?.name || 'Event Fest 2026'}
+          onClose={() => setCertModalUser(null)}
         />
       )}
     </div>

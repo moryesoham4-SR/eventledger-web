@@ -3,6 +3,9 @@ import client from './client'
 export const listTasks = (eventId, deptId = null) =>
   client.get('/api/tasks', { params: { event_id: eventId, dept_id: deptId || undefined } }).then((r) => r.data)
 
+export const getTaskAuditReport = (eventId) =>
+  client.get('/api/tasks/audit-report', { params: { event_id: eventId } }).then((r) => r.data)
+
 export const getTasksSummary = (eventId) =>
   client.get('/api/tasks/summary', { params: { event_id: eventId } }).then((r) => r.data)
 

@@ -9,3 +9,4 @@ export const deleteDepartment = (id) => client.delete(`/api/departments/${id}`).
 export const getDepartmentRoster = (deptId) => client.get(`/api/departments/${deptId}/roster`).then((r) => r.data)
 export const assignDepartmentMember = (deptId, data) => client.post(`/api/departments/${deptId}/assign-member`, data).then((r) => r.data)
 export const removeDepartmentMember = (deptId, userId) => client.delete(`/api/departments/${deptId}/members/${userId}`).then((r) => r.data)
+export const penalizeDepartmentDemerits = (deptId, data) => client.post(`/api/departments/${deptId}/penalize-demerits`, data).then((r) => r.data)
