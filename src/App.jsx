@@ -25,6 +25,7 @@ import Settings from './pages/Settings'
 import Analytics from './pages/Analytics'
 import Calendar from './pages/Calendar'
 import Leaderboard from './pages/Leaderboard'
+import MasterPlanning from './pages/MasterPlanning'
 
 export default function App() {
   return (
@@ -58,6 +59,7 @@ export default function App() {
                   <Route path="/vendors" element={<Vendors />} />
                   <Route path="/sponsors" element={<Sponsors />} />
                   <Route path="/departments" element={<Departments />} />
+                  <Route path="/planning" element={<MasterPlanning />} />
                   <Route path="/leaderboard" element={<Leaderboard />} />
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/users" element={<Users />} />

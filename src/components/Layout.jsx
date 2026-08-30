@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { path: '/vendors', label: 'Vendors' },
   { path: '/sponsors', label: 'Sponsors' },
   { path: '/departments', label: 'Departments & Work' },
+  { path: '/planning', label: '⭐ Master & Backup Planning' },
   { path: '/users', label: '👥 Users & Team' },
   { path: '/leaderboard', label: '🏆 Leaderboard & Awards' },
   { path: '/notifications', label: 'Notifications' },
