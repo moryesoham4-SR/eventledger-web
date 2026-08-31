@@ -8,6 +8,6 @@ export function saveGoogleSheetsConfig(data) {
   return client.post('/api/integrations/google-sheets', data).then((r) => r.data)
 }
 
-export function triggerSyncAll(eventId) {
-  return client.post('/api/integrations/google-sheets/sync-all', { event_id: eventId }).then((r) => r.data)
+export function triggerSyncAll(eventId, webhookUrl = null) {
+  return client.post('/api/integrations/google-sheets/sync-all', { event_id: eventId, webhook_url: webhookUrl }).then((r) => r.data)
 }

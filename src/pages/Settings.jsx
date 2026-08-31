@@ -202,7 +202,7 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
           is_auto_sync_enabled: isAutoSyncEnabled,
         })
       }
-      const res = await integrationsApi.triggerSyncAll(Number(activeEventId))
+      const res = await integrationsApi.triggerSyncAll(Number(activeEventId), webhookUrl.trim())
       toast.success(res.message || 'Full EventLedger auto-sync dispatched to Google Sheets! 📊')
       setLastSyncedAt(new Date().toISOString())
     } catch (err) {
