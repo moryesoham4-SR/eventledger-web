@@ -162,6 +162,26 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
     }
   }, [activeEventId])
 
+  const normalizeWebhookUrl = (raw) => {
+    let u = (raw || '').trim()
+    if (!u) return ''
+    if (!u.startsWith('http')) {
+      if (u.includes('script.google.com')) {
+        u = 'https://' + u.replace(/^\/+/, '')
+      } else if (u.startsWith('AKfy')) {
+        u = `https://script.google.com/macros/s/${u}`
+      } else if (u.startsWith('dfT-')) {
+        u = `https://script.google.com/macros/s/AKfycbyipNRdqLeRN3ttyOK${u}`
+      } else if (u.includes('/exec') || u.length > 30) {
+        u = `https://script.google.com/macros/s/${u}`
+      }
+    }
+    if (u.includes('script.google.com/macros/s/') && !u.endsWith('/exec')) {
+      u = u.replace(/\/+$/, '') + '/exec'
+    }
+    return u
+  }
+
   const isSheetUrl = webhookUrl.includes('docs.google.com/spreadsheets')
 
   const handleSaveConfig = async (e) => {
@@ -171,13 +191,15 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
       toast.error('Please paste the Apps Script Web App URL (script.google.com), not the Spreadsheet URL.')
       return
     }
+    const cleanUrl = normalizeWebhookUrl(webhookUrl)
     setSaving(true)
     try {
       await integrationsApi.saveGoogleSheetsConfig({
         event_id: Number(activeEventId),
-        webhook_url: webhookUrl.trim(),
+        webhook_url: cleanUrl,
         is_auto_sync_enabled: isAutoSyncEnabled,
       })
+      setWebhookUrl(cleanUrl)
       toast.success('Google Sheets Webhook saved!')
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to save webhook'))
@@ -193,16 +215,18 @@ function GoogleSheetsIntegrationSection({ activeEventId }) {
       setShowScriptDrawer(true)
       return
     }
+    const cleanUrl = normalizeWebhookUrl(webhookUrl)
     setSyncing(true)
     try {
-      if (webhookUrl.trim()) {
+      if (cleanUrl) {
         await integrationsApi.saveGoogleSheetsConfig({
           event_id: Number(activeEventId),
-          webhook_url: webhookUrl.trim(),
+          webhook_url: cleanUrl,
           is_auto_sync_enabled: isAutoSyncEnabled,
         })
+        setWebhookUrl(cleanUrl)
       }
-      const res = await integrationsApi.triggerSyncAll(Number(activeEventId), webhookUrl.trim())
+      const res = await integrationsApi.triggerSyncAll(Number(activeEventId), cleanUrl)
       toast.success(res.message || 'Full EventLedger auto-sync dispatched to Google Sheets! 📊')
       setLastSyncedAt(new Date().toISOString())
     } catch (err) {
